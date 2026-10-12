@@ -28,25 +28,34 @@ externa platform. Infraestructura provisiona customers_app LOGIN INHERIT, sin
 privilegios administrativos, membresías ajenas ni propiedad de objetos, con
 search_path customers_schema.
 
-1. Copiar el ejemplo a env/dev.env, env/qa.env o env/main.env.
-2. Ajustar URL/usuario y ruta absoluta a un archivo protegido fuera del
-   repositorio con solo la contraseña administrativa (sin comillas de shell).
-   Usar ACL de usuario en Windows o modo 0600 en Linux.
+1. Copiar .env.example o el ejemplo del ambiente a env/dev.env, env/qa.env o env/main.env.
+2. Infraestructura suministra FLYWAY_URL, FLYWAY_USER y FLYWAY_PASSWORD desde
+   su entorno protegido. Alternativamente, usar el override de archivo descrito abajo.
 3. Infraestructura crea red, inicia PostgreSQL y espera salud.
 4. En qa/main, exigir backup verificado antes de ejecutar deliberadamente:
 
 ```sh
-docker compose --env-file env/dev.env -f deploy/compose.yml run --rm -T customers-migrate migrate
-docker compose --env-file env/dev.env -f deploy/compose.yml run --rm -T customers-migrate validate
+docker compose --env-file env/dev.env -f deploy/compose.yml run --rm -T customers-db-migrate migrate
+docker compose --env-file env/dev.env -f deploy/compose.yml run --rm -T customers-db-migrate validate
 ```
 
 | Variable | Uso |
 |---|---|
 | COMPOSE_PROJECT_NAME | synkro-dev, synkro-qa o synkro-main |
 | PLATFORM_NETWORK | Red externa, por defecto platform; configurable para pruebas aisladas |
-| CUSTOMERS_FLYWAY_URL | jdbc:postgresql://host:puerto/base; solo admite ?sslmode=disable/require/verify-ca/verify-full |
-| DB_ADMIN_USER | Usuario administrativo, transformado en FLYWAY_USER |
-| CUSTOMERS_DB_ADMIN_PASSWORD_FILE | Ruta absoluta del secreto, leído como FLYWAY_PASSWORD dentro del runner |
+| FLYWAY_URL | jdbc:postgresql://synkro-db:5432/synkro?connectTimeout=5&socketTimeout=60 |
+| FLYWAY_USER | Usuario administrativo suministrado por infraestructura |
+| FLYWAY_PASSWORD | Contraseña en entorno protegido, nunca argumento de línea de comandos |
+| FLYWAY_PASSWORD_FILE | Ruta dentro del contenedor a un archivo previamente montado; prevalece sobre FLYWAY_PASSWORD |
+| CUSTOMERS_FLYWAY_URL | Alias anterior, usado solo si FLYWAY_URL está vacío |
+| DB_ADMIN_USER | Alias anterior, usado solo si FLYWAY_USER está vacío |
+| CUSTOMERS_DB_ADMIN_PASSWORD_FILE | Ruta absoluta del secreto en el host, solo con deploy/compose.secrets.yml |
+
+El modo estándar no exige archivo. Para usar un archivo protegido fuera del
+repositorio (ACL restringida o 0600), añadir `-f deploy/compose.secrets.yml`
+después de `-f deploy/compose.yml`. Ese override monta el secreto y fija
+FLYWAY_PASSWORD_FILE. Un archivo configurado inválido o vacío falla: no recurre
+a la contraseña del entorno. No publicar la salida de compose config con secretos.
 
 La URL admite hostname/IPv4, no IPv6, credenciales ni parámetros arbitrarios.
 Infraestructura monta certificados de confianza si usa TLS con verificación.
@@ -57,7 +66,15 @@ que puede inspeccionar procesos y secretos.
 
 Flyway está fijado a 10.20.1. El servicio tiene perfil tooling, sin puertos ni
 base/volumen propios, y repositorio de solo lectura. up sin ese perfil no migra.
-Tres reintentos de conexión complementan la espera de salud de infraestructura.
+Tres reintentos complementan la espera de salud. Los límites JDBC por defecto
+son connectTimeout=5, loginTimeout=10 y socketTimeout=60 segundos. La URL puede
+reducirlos (respectivamente 1..5, 1..10 y 1..60), nunca desactivarlos ni duplicarlos.
+También admite sslmode=disable/prefer/require/verify-ca/verify-full. URL prevalece
+sobre las propiedades JDBC del archivo; por eso se valida explícitamente.
+No es un límite total de duración de migraciones. Con imágenes disponibles y
+Docker/DNS operativos, el fixture de motor pausado debe salir por sí mismo antes
+de 90 s; una lectura bloqueada con socketTimeout=2 debe fallar antes de 30 s.
+El guardián de 180 s del arnés no cuenta como éxito.
 El wrapper devuelve 2 para configuración/operación inválida y propaga errores
 de Flyway. Solo acepta migrate/validate/info, sin opciones arbitrarias.
 info devuelve confirmación sin detalle bruto. Inventario administrativo:
@@ -76,19 +93,29 @@ include:
   - ../synkro-customers-db/deploy/compose.yml
 ```
 
-El montaje relativo se resuelve desde deploy/compose.yml. El secreto usa ruta
+El montaje relativo se resuelve desde deploy/compose.yml. El secreto opcional usa ruta
 absoluta. La raíz define PostgreSQL; no se duplica aquí. Si también declara
 platform, usar la misma configuración de red externa. Este archivo no declara
 name ni reemplaza el proyecto raíz.
 
 ```sh
-docker compose --env-file env/dev.env up -d --wait postgres
-docker compose --env-file env/dev.env run --rm -T customers-migrate migrate
-docker compose --env-file env/dev.env run --rm -T customers-migrate validate
+docker compose --env-file env/dev.env up -d --wait synkro-db
+docker compose --env-file env/dev.env run --rm -T customers-db-migrate migrate
+docker compose --env-file env/dev.env run --rm -T customers-db-migrate validate
 ```
 
-postgres es un ejemplo de nombre de servicio: adaptar alias y URL al contrato
-de infraestructura. Serializar runners administrativos. Exigir salida cero y
+Contrato consultado: [handoff de infraestructura](https://github.com/code-corhuila/synkro-infra-postgres/blob/7731dc3c4e077b15a98254ddf56777195f1bd5dd/docs/owner-handoffs/customers-db.md).
+Para incluir ambos archivos desde la raíz, usar:
+
+```yaml
+include:
+  - path:
+      - ../synkro-customers-db/deploy/compose.yml
+      - ../synkro-customers-db/deploy/compose.secrets.yml
+```
+
+La suite reproduce este contrato; no ejecuta la plataforma completa.
+Serializar runners administrativos. Exigir salida cero y
 verificar permisos antes de desplegar Customers API; nunca darle credenciales admin.
 
 ## Pruebas y recuperación
@@ -115,8 +142,14 @@ DML/TCL quedan vacías sin operaciones aprobadas. No editar V aplicadas. No usar
 undo (no disponible en Community) ni clean. Las U destruyen datos y se prueban
 solo en instancias desechables; en qa/main preferir V correctiva y backup.
 
+Rama de entrega: `feat/customers-schema-and-migration-runner`. Se conserva el
+commit revisado 90b0229. Por instrucción del usuario, las rutas y el contenido
+de todas las V/U permanecen idénticos: el traslado de 00_schemas a 01_schemas
+queda BLOCKED hasta confirmar posibles aplicaciones persistentes.
+
 [Diseño y matriz](docs/design.md) · [Recuperación](docs/recovery.md) ·
-[Handoff de infraestructura/API](docs/handoff.md) · [Evidencia](docs/evidence.md)
+[Handoff de infraestructura/API](docs/handoff.md) · [Evidencia histórica](docs/evidence.md) ·
+[Correcciones y evidencia](docs/corrections-evidence.md) · [Aceptación](docs/acceptance.md)
 
 Part of the **SynkroTech SAS Sales Management System** — organization `code-corhuila`.
 Governance and documentation live in [`synkro-docs`](https://github.com/code-corhuila/synkro-docs).

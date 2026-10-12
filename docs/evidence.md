@@ -1,7 +1,9 @@
 # Evidencia de validación
 
 Fecha: 2026-10-12. Base develop: a098042426f259270d9ba28728212872fd2c1b4f.
-Rama: codex/hu-cli-02-customers-db.
+Rama histórica: codex/hu-cli-02-customers-db (90b0229, PR #2).
+Rama vigente: feat/customers-schema-and-migration-runner; el ciclo posterior
+está separado en corrections-evidence.md. Este archivo preserva el ciclo original.
 
 ## Antes de implementar SQL y runner
 
@@ -36,8 +38,8 @@ transitorio se descargaron las imágenes fijadas:
   Incluye ausencia de customers_app antes de cualquier esquema/historia,
   contraseña incorrecta rechazada, secretos vacíos/inaccesibles y reconstrucción.
   Los recursos efímeros y archivos secretos se eliminaron al finalizar.
-- CI remoto: se verificará en el PR; sus enlaces y SHA de entrega se informan
-  en la descripción del PR para no autorreferenciar el SHA dentro de su commit.
+- CI original: [run 38277301480](https://github.com/code-corhuila/synkro-customers-db/actions/runs/38277301480),
+  check-common-files y migration-rebuild exitosos para la entrega 90b0229.
 
 La evidencia TDD cubre inventario y la corrección de autenticación; el primer
 intento de integración previo al SQL quedó bloqueado por Docker, no se presenta

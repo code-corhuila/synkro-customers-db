@@ -2,8 +2,12 @@
 
 ## Fallo del runner
 
-- Configuración (código 2): revisar URL/usuario/archivo legible, formato de URL
+- Configuración (código 2): revisar URL/usuario/contraseña por entorno o archivo legible, formato de URL
   y operación admitida. No imprimir el archivo ni el entorno.
+- Si FLYWAY_PASSWORD_FILE está configurado, tiene precedencia; no hay fallback
+  a FLYWAY_PASSWORD ante archivo inválido. Compose estándar no exige secreto.
+- Revisar límites JDBC 5/10/60 s y parámetros permitidos de README. Un error de
+  socket revierte la operación afectada; no elevar límites sin diagnosticar salud/bloqueos.
 - Flyway (código propagado): comprobar salud/red, autenticación administrativa,
   customers_app provisionado sin privilegios elevados, historia legacy en public
   y checksums con validate.
@@ -18,6 +22,10 @@
   no alterar checksums de migraciones históricas para hacer pasar validate.
 
 ## Entornos con datos
+
+Esta corrección solo ejecuta pruebas desechables. No existe confirmación de
+aplicación persistente de 90b0229: conservar todas las V/U y sus rutas hasta
+inventario acordado con responsables; no hacer repair ni alterar historial.
 
 En qa/main, infraestructura obtiene y verifica el backup antes de migrar, fuera
 de los repositorios. Un backup fallido detiene el despliegue. Ensayar su

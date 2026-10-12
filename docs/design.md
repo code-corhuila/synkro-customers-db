@@ -1,6 +1,8 @@
 # HU-CLI-02: diseño y conciliación
 
-Diseño registrado antes de implementar las migraciones (2026-10-12).
+Diseño inicial registrado antes de implementar las migraciones (2026-10-12).
+Contrato del runner actualizado posteriormente; evidencia de ese ciclo en corrections-evidence.md.
+Rama vigente: feat/customers-schema-and-migration-runner; 90b0229 conservado como ancestro.
 
 - Historia confirmada: [synkro-docs#244](https://github.com/code-corhuila/synkro-docs/issues/244).
 - HU-CLI-01 (#187) entrega la estructura de Customers API; la persistencia corresponde a esta historia.
@@ -36,15 +38,32 @@ y [connectRetries](https://documentation.red-gate.com/fd/environment-connect-ret
 | 006 | 03_dcl/00_roles | reader/writer NOLOGIN | DROP ROLE |
 | 007 | 03_dcl/01_grants | permisos explícitos y membresía customers_app | REVOKE |
 
-Cada V tendrá una U en `05_rollbacks/<misma familia>`. DML y TCL quedan documentadas y vacías: no hay semillas ni transacciones administrativas aprobadas que justifiquen SQL adicional. Flyway administra la transacción por migración.
+Cada V tiene una U en `05_rollbacks/<misma familia>`. DML y TCL conservan sus README como placeholders: no hay semillas ni transacciones administrativas aprobadas que justifiquen SQL adicional. Flyway administra la transacción por migración.
+
+La familia requerida para el esquema es 01_schemas. El traslado de V001/U001
+queda BLOCKED: el usuario desconoce aplicaciones persistentes y ordenó preservar
+rutas y contenido. La tabla refleja la ubicación real conservada, no conformidad
+con esa corrección pendiente. No se crean SQL duplicados ni vacíos.
 
 `customer`: UUID por defecto, nombre 1–150, documento único 1–30 incluso inactivo, email hasta 255, teléfono hasta 20, dirección hasta 255; opcionales NULL. `registration_date` timestamptz/now(), `active` true. `idempotency_key`: key 8–128, PK; customer_id obligatorio y FK; created_at timestamptz/now(). No se agregan reglas de formato ni índices sin diseño.
 
 ## Contrato previsto del ejecutor
 
-Servicio `customers-migrate`, perfil `tooling`, imagen Flyway fijada, repositorio montado solo lectura. Sin PostgreSQL, puertos ni volumen persistente. Red externa `platform`; infraestructura espera salud antes de ejecutar, y Flyway tiene reintentos limitados. `up` sin perfil no migra.
+Servicio `customers-db-migrate`, perfil `tooling`, imagen Flyway fijada, repositorio montado solo lectura. Sin PostgreSQL, puertos ni volumen persistente. Red externa `platform`; infraestructura espera salud antes de ejecutar. `up` sin perfil no migra.
 
-Solo operaciones migrate/validate/info. URL JDBC sin credenciales y usuario administrativo por variables; contraseña desde un archivo secreto de Compose. Configuración fija: único/default schema customers_schema, historial flyway_schema_history, clean y baseline automático desactivados. Errores y salidas nunca imprimen credenciales ni SQL con datos. El runner devuelve código distinto de cero y una categoría de diagnóstico; el detalle sensible se investiga en una sesión administrativa protegida.
+Solo operaciones migrate/validate/info. Interfaz FLYWAY_URL/USER/PASSWORD, destino
+publicado synkro-db:5432/synkro. Alternativa opcional de archivo con precedencia
+sobre PASSWORD y fallo sin fallback si es inválido. Alias anteriores solo si las
+variables nuevas están vacías. Detalles y los nueve parámetros en README.
+Límites JDBC connectTimeout/loginTimeout/socketTimeout de 5/10/60 s, además de
+reintentos; no constituyen un límite total de migración. URL solo puede reducirlos.
+Configuración fija: único/default schema customers_schema, historial
+flyway_schema_history, clean y baseline automático desactivados. Salidas sin
+credenciales ni SQL con datos; diagnóstico sensible en sesión protegida.
+
+Fuentes: [handoff vigente](https://github.com/code-corhuila/synkro-infra-postgres/blob/7731dc3c4e077b15a98254ddf56777195f1bd5dd/docs/owner-handoffs/customers-db.md),
+[propiedades pgJDBC](https://jdbc.postgresql.org/documentation/use/) y
+[jdbcProperties de Flyway](https://documentation.red-gate.com/flyway/reference/configuration/environments-namespace/environment-jdbc-properties-namespace).
 
 Flyway puede crear el esquema para alojar su historial antes de V001; V001 lo declara idempotentemente y aplica la política de acceso. Las U se ejecutan con psql en entorno desechable, inversamente, quitando el historial antes de U001; nunca se usa clean ni se presupone licencia de undo.
 
@@ -62,4 +81,7 @@ Flyway puede crear el esquema para alojar su historial antes de V001; V001 lo de
 | CLI-DB-12 | composición externa incluye runner con rutas, red y secreto reales |
 | CLI-DB-13/14 | CI conserva controles comunes; inventario V/U, diff de archivos protegidos |
 
-Las pruebas se escribirán antes del SQL/runner. La evidencia distinguirá un fallo de infraestructura de un rojo funcional; ningún chequeo estático sustituye PostgreSQL real.
+El plan inicial pedía pruebas antes del SQL/runner. El rojo funcional completo
+del modelo no quedó demostrado antes de implementar: Docker bloqueó ese intento.
+evidence.md conserva lo sucedido; corrections-evidence.md registra exclusivamente
+el ciclo posterior. acceptance.md distingue repositorio, centinela, plataforma y API.

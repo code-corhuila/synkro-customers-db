@@ -1,33 +1,48 @@
-## Description
+## Cambios
 
-### Summary
+HU-CLI-02 entrega customer e idempotency_key, permisos limitados e historial
+exclusivo. Esta revisión conserva 90b0229 y alinea el ejecutor con el handoff
+publicado de infraestructura: customers-db-migrate, FLYWAY_URL/USER/PASSWORD,
+archivo opcional con precedencia y límites JDBC 5/10/60 segundos.
 
-Completa Customers DB para HU-CLI-02: customer e idempotency_key con restricciones
-del modelo, roles NOLOGIN, grants limitados, historial propio y runner explícito
-contra PostgreSQL compartido.
+Rama: feat/customers-schema-and-migration-runner → develop.
+Sustituye como candidato de entrega a #2, que permanece abierto y en borrador
+con su rama intacta. Renombrar su head cerraría el PR según GitHub; se publica
+una referencia nueva sin reescritura ni borrado.
 
-### Changes
+## Validación y evidencia
 
-- Siete V y siete U, sin semillas ni usuarios nuevos.
-- Compose tooling con secreto por archivo, montaje de solo lectura y versión fija.
-- Pruebas reales de restricciones, permisos, atomicidad, aislamiento y reconstrucción.
-- Conserva controles CI y agrega migration-rebuild.
-- Documenta integración, recuperación y conciliación del backlog.
+- Pruebas de correcciones guardadas primero en 2db2b7e: inventario 1 PASS/2 FAIL
+  y REV-01 1 FAIL/13 omitidas antes de implementar; el resto de REV ya estaba escrito.
+- El ciclo original tuvo rojo de inventario, bloqueo Docker y rojo posterior
+  de autenticación. No demuestra rojo funcional completo del modelo antes del SQL.
+- Las pruebas usan exclusivamente PostgreSQL desechable, conexiones SCRAM,
+  composición externa y centinela. Incluyen motor pausado, lectura bloqueada,
+  checksum alterado solo en fixture, precedencia de secretos y reconstrucción.
+- Matriz CLI-DB-01…14: docs/acceptance.md. Resultados: docs/corrections-evidence.md.
+- Verde local: 3/3 estáticas y 14/14 integración, sin omisiones, 210.8 s;
+  motor pausado 29.020 s y lectura bloqueada 6.269 s, salida propia 1 en ambos.
+- CI del SHA publicado y enlace de ejecución: se agregan a la descripción remota
+  tras verificar ambos jobs, sin atribuir al SHA nuevo el CI histórico.
 
-### Validation
+## Pendientes y alcance
 
-Local: inventario V/U 1/1; aceptación PostgreSQL 9/9 con SCRAM obligatorio
-(114.6 s), reconstrucción completa y segunda ejecución sin cambios. Compose,
-sintaxis Node y git diff --check correctos; CODEOWNERS intacto.
-Evidencia rojo/verde y límites en docs/evidence.md. Verificar también el job
-migration-rebuild de este PR antes de integrar.
+**NOT READY — conservar borrador.** El traslado 00_schemas → 01_schemas queda
+BLOCKED por orden del usuario hasta confirmar aplicaciones persistentes. Todas
+las rutas y bytes de V/U y CODEOWNERS permanecen idénticos a 90b0229.
+No se modificaron bases persistentes ni otros repositorios.
 
-### Definition of Done
+El contrato se contrastó con infra@7731dc3; no acredita plataforma completa.
+Ángel recibe docs/handoff.md para pin aprobado, inventario e integración real.
+Customers API y conciliación del alcance en synkro-docs #244 siguen como handoff.
 
-- [x] Tests were written before the implementation (see scoped evidence)
-- [ ] The pipeline passes
-- [x] No hardcoded credentials, keys, or environment secrets
-- [ ] Reviewed and approved per branch policy
+## Definition of Done
 
-Refs code-corhuila/synkro-docs#244. Cierre después de revisión, integración y
-conciliación documental; no cierra las historias relacionadas.
+- [ ] TDD funcional completo de la implementación original (evidencia parcial explícita)
+- [x] Pruebas de correcciones registradas antes de implementar; rojo separado del ciclo original
+- [ ] Pipeline del SHA final verificado (actualizar en PR con enlace)
+- [x] Sin credenciales comprometidas ni argumentos con contraseñas
+- [ ] Familia 01_schemas conciliada con posibles aplicaciones persistentes
+- [ ] Revisado y aprobado conforme a política
+
+Refs code-corhuila/synkro-docs#244. No cierra la HU ni historias relacionadas.

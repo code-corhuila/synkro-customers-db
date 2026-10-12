@@ -7,7 +7,8 @@ Rama: `feat/customers-schema-and-migration-runner`.
 
 El remoto y la copia local coincidían en el SHA revisado; no había cambios
 locales ni commits ajenos adicionales. El PR #2 seguía abierto y en borrador.
-GitHub cierra un PR al renombrar su rama head; no se ejecutó esa operación.
+Según [GitHub](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-branches-in-your-repository/renaming-a-branch),
+renombrar la rama head cierra su PR; no se ejecutó esa operación.
 Se conserva #2 y su rama, y se prepara un PR de sustitución explícito.
 
 Infraestructura: handoff leído en
@@ -42,4 +43,29 @@ rojo funcional del modelo completo antes de la implementación inicial.
 
 ## Verde y publicación
 
-Pendientes de registrar después de implementar y ejecutar la revisión.
+Las pruebas rojas y este registro se guardaron en el commit adicional `2db2b7e`,
+antes de modificar Compose, wrapper, configuración o ejemplos. No hubo amend,
+rebase ni force-push.
+
+Dos ejecuciones iniciales posteriores dieron 3/3 estáticas y 13/14 integración.
+REV-01 requirió corregir el propio test: activar tooling al inspeccionar config
+y no comparar una contraseña con la representación escapada de Compose (`$`).
+La contraseña exacta ya se verifica mediante migración real con SCRAM. No se
+atribuyen esos dos fallos del arnés al código de producción. En ambas ejecuciones
+pasaron motor pausado, lectura bloqueada, drift y reconstrucción.
+
+Verde local final (2026-10-12):
+
+- `node --test tests/contract.test.mjs`: **3/3 PASS**, sin omisiones.
+- REV-01 aislada: 1 PASS, 13 omitidas por filtro, 39.3 s.
+- `node --test --test-concurrency=1 tests/integration.test.mjs`: **14/14 PASS**,
+  0 FAIL, 0 omitidas, 210.8 s. Incluye restricciones, permisos efectivos, SCRAM,
+  secretos, include externo, repetición y U inversas/reconstrucción completa.
+- Motor pausado: 29 020 ms, salida propia 1, menor que 90 s; lectura bloqueada:
+  6 269 ms, salida propia 1, menor que 30 s. Ninguna dependió del timeout de 180 s.
+- Sintaxis Node y git diff --check correctos. Diff contra 90b0229 vacío para
+  DDL/DML/DCL/TCL, U y CODEOWNERS: rutas y contenido históricos intactos.
+- Entornos exclusivamente desechables, con eliminación de recursos y archivos
+  temporales por el teardown. Ninguna base persistente consultada ni modificada.
+
+CI del nuevo SHA pendiente de publicación; se actualizará con enlace verificable.
