@@ -13,6 +13,10 @@ defaultSchema = "customers_schema"
 connectRetries = 3
 connectRetriesInterval = 2
 schemas = ["customers_schema"]
+# pgJDBC seconds; retries alone never limit a blocked connection or read.
+jdbcProperties.connectTimeout = "5"
+jdbcProperties.loginTimeout = "10"
+jdbcProperties.socketTimeout = "60"
 # Runs before history creation, including on the second application.
 initSql = """
 DO $preflight$
