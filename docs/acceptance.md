@@ -19,25 +19,29 @@ corrections-evidence.md. PASS se limita al repositorio y fixtures.
 | CLI-DB-10 | PASS | Siete U inversas, reconstrucción, repetición; CONT-05 bloquea dependencias sin CASCADE |
 | CLI-DB-11 | PASS | Configuración/autenticación/conectividad/secreto, límites reales, CONT-04 roles inseguros incluso no-op |
 | CLI-DB-12 | PASS | Include externo, tooling, red externa, montaje solo lectura, variables y secretos |
-| CLI-DB-13 | BLOCKED | Push de rama habilitado; falta verificar CI del SHA publicado de la continuación |
+| CLI-DB-13 | PASS | Push de rama activa ambos jobs; [CI 38293018044](https://github.com/code-corhuila/synkro-customers-db/actions/runs/38293018044) SUCCESS para d463787 |
 | CLI-DB-14 | PASS | Bytes de los 14 SQL, nombres/versiones, CODEOWNERS e historial/autoría conservados; CONT-01/06 |
 
 Pruebas: [integración](../tests/integration.test.mjs) y
 [contrato](../tests/contract.test.mjs). V001/U001 en 01_schemas;
 las otras seis parejas mantienen familia. DML/TCL y espejos tienen placeholders,
 sin migraciones vacías. Primera ejecución: 6/6 estáticas y 17/17 integración,
-0 fallos/omisiones; evidencia final posterior en corrections-evidence.md.
+0 fallos/omisiones. Local final: 17/17 en 237.210 s; CI de código validado:
+6/6 y 17/17 en 96.987 s de integración, 0 fallos/omisiones.
+Código validado/publicado: d4637877b650f0918ca74b6594c266f8f54e0b56.
+El commit documental posterior conserva ese código/pruebas. El SHA de entrega
+final y su propia ejecución CI se verifican y entregan en el informe final.
 
 | Frontera | Estado | Siguiente acción |
 |---|---|---|
-| Repositorio / fixtures | PASS | Validación técnica local; CI pendiente |
+| Repositorio / fixtures | PASS | Validación técnica local y ambos jobs CI del código publicado |
 | Traslado 00_schemas → 01_schemas | PASS | CONT-03, Flyway 10.20.1 original y estructura propuesta, misma base y datos intactos |
 | Centinela | PASS | Prueba del repositorio; no integra todos los dominios |
 | Plataforma real | BLOCKED | Ángel revisa/aprueba pin y ejecuta composición raíz; fixture 16.6, infraestructura 16.15 |
 | Customers API | BLOCKED | Equipo API integra persistencia y HTTP; no implementado aquí |
 | Conciliación documental | BLOCKED | Preparación en handoff.md para #244/backlog, sin editar synkro-docs |
 
-**NOT READY** mientras falte CI de la continuación. La preparación técnica
-para revisión no cierra la HU ni acredita revisión humana, integración aprobada,
+**READY FOR REVIEW** del alcance técnico del repositorio, con código y pruebas
+locales/remotos verdes. Esta preparación no cierra la HU ni acredita revisión humana, integración aprobada,
 Customers API o plataforma completa. PR #2 se encontró cerrado sin merge;
 no hay PR abierto para la rama actual. Descripción preparada en pull-request.md.

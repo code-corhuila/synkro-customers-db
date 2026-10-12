@@ -159,3 +159,30 @@ Validación local final de código/pruebas (2026-10-12):
   nuevas, CODEOWNERS normalizado por Git intacto. No se editó otro repositorio.
 
 Publicación y CI de la continuación se registran después de verificar el remoto.
+
+## Continuación — publicación, CI y limpieza verificados
+
+Push normal de `d4637877b650f0918ca74b6594c266f8f54e0b56` a
+feat/customers-schema-and-migration-runner; remoto exacto confirmado.
+[CI 38293018044](https://github.com/code-corhuila/synkro-customers-db/actions/runs/38293018044),
+evento push, mismo SHA, completed/success:
+
+- check-common-files SUCCESS (5 s).
+- migration-rebuild SUCCESS (1m56s): checkout completo, Node 22, contrato
+  **6/6 PASS**, imágenes fijadas, integración **17/17 PASS**, 0 FAIL/omisiones,
+  **96.987 s**. Motor pausado 26 164 ms, lectura bloqueada 3 309 ms, salida 1.
+- No se reutilizó el CI histórico de 90b0229. PR abiertos reconsultados: ninguno.
+  #2 ya estaba cerrado; no se creó/cerró/fusionó PR ni se recreó su rama.
+
+Limpieza local verificada: no containers/redes customers-test-* ni verificadores
+customers-check-*; directorios originales/propuestos y archivos de contraseña
+eliminados por teardown; fuentes temporales y .test-run vacío eliminados.
+Inventario de nueve contenedores y diez redes existentes igual al inicial.
+No consultas ni cambios de bases persistentes, volúmenes, pins, CODEOWNERS,
+configuraciones GitHub, ramas permanentes u otros repositorios.
+
+El commit documental posterior registra estos resultados sin modificar el código
+validado. El SHA completo final y el CI de ese mismo SHA se verifican tras su
+push y se entregan en el informe final, evitando una referencia circular al
+propio commit. READY FOR REVIEW técnico; aprobación humana, integración raíz,
+Customers API y conciliación/cierre documental siguen separados.
