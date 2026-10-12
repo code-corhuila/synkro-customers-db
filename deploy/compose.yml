@@ -1,5 +1,5 @@
 services:
-  customers-migrate:
+  customers-db-migrate:
     image: flyway/flyway:10.20.1
     profiles: [tooling]
     working_dir: /workspace
@@ -7,21 +7,17 @@ services:
     command: [migrate]
     restart: "no"
     environment:
-      FLYWAY_URL: ${CUSTOMERS_FLYWAY_URL:-}
-      FLYWAY_USER: ${DB_ADMIN_USER:-}
-      FLYWAY_PASSWORD_FILE: /run/secrets/customers_db_admin_password
-    secrets:
-      - customers_db_admin_password
+      FLYWAY_URL: ${FLYWAY_URL:-${CUSTOMERS_FLYWAY_URL:-}}
+      FLYWAY_USER: ${FLYWAY_USER:-${DB_ADMIN_USER:-}}
+      FLYWAY_PASSWORD: ${FLYWAY_PASSWORD:-}
+      FLYWAY_PASSWORD_FILE: ${FLYWAY_PASSWORD_FILE:-}
     volumes:
       - type: bind
         source: ..
         target: /workspace
         read_only: true
+        bind: {create_host_path: false}
     networks: [platform]
-
-secrets:
-  customers_db_admin_password:
-    file: ${CUSTOMERS_DB_ADMIN_PASSWORD_FILE:?Set CUSTOMERS_DB_ADMIN_PASSWORD_FILE to a protected absolute file path}
 
 networks:
   platform:

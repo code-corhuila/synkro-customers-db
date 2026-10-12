@@ -233,7 +233,7 @@ test('REV-01: published infrastructure interface, external include and file prec
   // Independently executable with --test-name-pattern=REV; only this test owns setup migrations.
   runner();
   const h = history();
-  const config = JSON.parse(docker([...compose, 'config', '--format', 'json']).stdout);
+  const config = JSON.parse(docker([...compose, '--profile', 'tooling', 'config', '--format', 'json']).stdout);
   const service = config.services['customers-db-migrate'];
   assert.deepEqual(service.profiles, ['tooling']);
   assert.ok(!service.ports?.length);
@@ -242,7 +242,9 @@ test('REV-01: published infrastructure interface, external include and file prec
   assert.ok(service.volumes.some(v => v.target === '/workspace' && v.read_only));
   assert.equal(service.environment.FLYWAY_URL, env.FLYWAY_URL);
   assert.equal(service.environment.FLYWAY_USER, env.FLYWAY_USER);
-  assert.ok(service.environment.FLYWAY_PASSWORD === adminPassword, 'Environment credential must pass unchanged');
+  // Compose config escapes dollars for re-interpolation. The successful SCRAM
+  // migration above verifies the exact credential delivered to the container.
+  assert.ok(service.environment.FLYWAY_PASSWORD, 'Environment credential must be wired');
   runner('validate', { CUSTOMERS_FLYWAY_URL: 'invalid-legacy-url', DB_ADMIN_USER: 'invalid-legacy-user' });
   runner('validate', { FLYWAY_URL: '', FLYWAY_USER: '', CUSTOMERS_FLYWAY_URL: env.FLYWAY_URL, DB_ADMIN_USER: env.FLYWAY_USER });
   runner('validate', { FLYWAY_PASSWORD: '', CUSTOMERS_DB_ADMIN_PASSWORD_FILE: resolve(work, 'admin.secret') }, true, [], true);
