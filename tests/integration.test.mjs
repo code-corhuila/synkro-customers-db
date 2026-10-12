@@ -16,9 +16,12 @@ const adminPassword = secret();
 const appPassword = secret();
 const otherPassword = secret();
 const env = { ...process.env, COMPOSE_PROJECT_NAME: id, PLATFORM_NETWORK: network,
-  CUSTOMERS_FLYWAY_URL: 'jdbc:postgresql://postgres:5432/customers_test',
-  DB_ADMIN_USER: 'postgres', CUSTOMERS_DB_ADMIN_PASSWORD_FILE: resolve(work, 'admin.secret') };
+  FLYWAY_URL: 'jdbc:postgresql://synkro-db:5432/synkro?connectTimeout=5&socketTimeout=60',
+  FLYWAY_USER: 'postgres', FLYWAY_PASSWORD: adminPassword,
+  FLYWAY_PASSWORD_FILE: '', CUSTOMERS_FLYWAY_URL: '', DB_ADMIN_USER: '',
+  CUSTOMERS_DB_ADMIN_PASSWORD_FILE: '' };
 const compose = ['compose', '-f', resolve(work, 'compose.json')];
+const secretCompose = ['compose', '-f', resolve(work, 'compose-secrets.json')];
 let started = false;
 
 function docker(args, { input, variables = {}, ok = true } = {}) {
@@ -30,7 +33,7 @@ function docker(args, { input, variables = {}, ok = true } = {}) {
 }
 function sql(query, user = 'postgres', ok = true, password) {
   return docker(['exec', '-i', '-e', 'PGPASSWORD', db, 'psql', '-X', '-h', '127.0.0.1',
-    '-U', user, '-d', 'customers_test', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=sqlstate', '-At'],
+    '-U', user, '-d', 'synkro', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=sqlstate', '-At'],
   { input: query, ok, variables: { PGPASSWORD: password ?? (user === 'postgres' ? adminPassword : user === 'customers_app' ? appPassword : otherPassword) } });
 }
 const value = query => sql(query).stdout.trim();
@@ -40,8 +43,8 @@ function reject(query, state, user = 'customers_app') {
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, new RegExp(`\\b${state}\\b`));
 }
-function runner(command = 'migrate', overrides = {}, ok = true, extra = []) {
-  const r = docker([...compose, 'run', '--rm', '-T', ...extra, 'customers-migrate', command], { variables: overrides, ok });
+function runner(command = 'migrate', overrides = {}, ok = true, extra = [], fileMode = false) {
+  const r = docker([...(fileMode ? secretCompose : compose), 'run', '--rm', '-T', ...extra, 'customers-db-migrate', command], { variables: overrides, ok });
   for (const s of [adminPassword, appPassword, otherPassword]) {
     assert.ok(!`${r.stdout}${r.stderr}`.includes(s), 'Runner leaked a credential');
   }
@@ -55,9 +58,10 @@ before(async () => {
   writeFileSync(resolve(work, 'admin.secret'), adminPassword, { mode: 0o600 });
   writeFileSync(resolve(work, 'wrong.secret'), secret(), { mode: 0o600 });
   writeFileSync(resolve(work, 'compose.json'), JSON.stringify({ include: [resolve(root, 'deploy/compose.yml')] }));
+  writeFileSync(resolve(work, 'compose-secrets.json'), JSON.stringify({ include: [{ path: [resolve(root, 'deploy/compose.yml'), resolve(root, 'deploy/compose.secrets.yml')] }] }));
   docker(['network', 'create', network]);
-  docker(['run', '-d', '--name', db, '--network', network, '--network-alias', 'postgres',
-    '--tmpfs', '/var/lib/postgresql/data', '-e', 'POSTGRES_PASSWORD', '-e', 'POSTGRES_DB=customers_test',
+  docker(['run', '-d', '--name', db, '--network', network, '--network-alias', 'synkro-db',
+    '--tmpfs', '/var/lib/postgresql/data', '-e', 'POSTGRES_PASSWORD', '-e', 'POSTGRES_DB=synkro',
     '-e', 'POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256',
     'postgres:16.6-alpine'], { variables: { POSTGRES_PASSWORD: adminPassword } });
   started = true;
@@ -205,13 +209,13 @@ test('CLI-DB-07/08: real app and reader sessions enforce least privilege and dom
 
 test('CLI-DB-11: invalid configuration, credentials, connection and missing user fail without secrets', () => {
   for (const overrides of [
-    { CUSTOMERS_FLYWAY_URL: '' }, { DB_ADMIN_USER: '' },
-    { CUSTOMERS_FLYWAY_URL: 'jdbc:postgresql://postgres:5432/customers_test?password=forbidden' },
-    { CUSTOMERS_FLYWAY_URL: 'jdbc:postgresql://postgres:1/customers_test' },
-    { CUSTOMERS_DB_ADMIN_PASSWORD_FILE: resolve(work, 'wrong.secret') },
+    { FLYWAY_URL: '' }, { FLYWAY_USER: '' }, { FLYWAY_PASSWORD: '' },
+    { FLYWAY_URL: 'jdbc:postgresql://synkro-db:5432/synkro?password=forbidden' },
+    { FLYWAY_URL: 'jdbc:postgresql://synkro-db:1/synkro' },
+    { FLYWAY_PASSWORD: otherPassword },
   ]) assert.notEqual(runner('migrate', overrides, false).status, 0);
   writeFileSync(resolve(work, 'empty.secret'), '', { mode: 0o600 });
-  assert.notEqual(runner('migrate', { CUSTOMERS_DB_ADMIN_PASSWORD_FILE: resolve(work, 'empty.secret') }, false).status, 0);
+  assert.notEqual(runner('migrate', { CUSTOMERS_DB_ADMIN_PASSWORD_FILE: resolve(work, 'empty.secret') }, false, [], true).status, 0);
   assert.notEqual(runner('migrate', {}, false, ['-e', 'FLYWAY_PASSWORD_FILE=/missing-secret']).status, 0);
   for (const command of ['clean', 'repair', '-X']) assert.notEqual(runner(command, {}, false).status, 0);
   const h = history();
@@ -223,6 +227,92 @@ test('CLI-DB-11: invalid configuration, credentials, connection and missing user
   try { assert.notEqual(runner('migrate', {}, false).status, 0); }
   finally { sql('DROP TABLE public.flyway_schema_history'); }
   assert.equal(history(), h);
+});
+
+test('REV-01: published infrastructure interface, external include and file precedence', () => {
+  // Independently executable with --test-name-pattern=REV; only this test owns setup migrations.
+  runner();
+  const h = history();
+  const config = JSON.parse(docker([...compose, 'config', '--format', 'json']).stdout);
+  const service = config.services['customers-db-migrate'];
+  assert.deepEqual(service.profiles, ['tooling']);
+  assert.ok(!service.ports?.length);
+  assert.equal(config.networks.platform.external, true);
+  assert.equal(config.networks.platform.name, network);
+  assert.ok(service.volumes.some(v => v.target === '/workspace' && v.read_only));
+  assert.equal(service.environment.FLYWAY_URL, env.FLYWAY_URL);
+  assert.equal(service.environment.FLYWAY_USER, env.FLYWAY_USER);
+  assert.ok(service.environment.FLYWAY_PASSWORD === adminPassword, 'Environment credential must pass unchanged');
+  runner('validate', { CUSTOMERS_FLYWAY_URL: 'invalid-legacy-url', DB_ADMIN_USER: 'invalid-legacy-user' });
+  runner('validate', { FLYWAY_URL: '', FLYWAY_USER: '', CUSTOMERS_FLYWAY_URL: env.FLYWAY_URL, DB_ADMIN_USER: env.FLYWAY_USER });
+  runner('validate', { FLYWAY_PASSWORD: '', CUSTOMERS_DB_ADMIN_PASSWORD_FILE: resolve(work, 'admin.secret') }, true, [], true);
+  runner('validate', { FLYWAY_PASSWORD: otherPassword, CUSTOMERS_DB_ADMIN_PASSWORD_FILE: resolve(work, 'admin.secret') }, true, [], true);
+  // A configured bad file must never silently fall back to the good environment password.
+  assert.notEqual(runner('validate', { CUSTOMERS_DB_ADMIN_PASSWORD_FILE: resolve(work, 'wrong.secret') }, false, [], true).status, 0);
+  assert.equal(history(), h);
+});
+
+test('REV-02: bounded unavailable engine, not a test-process timeout', t => {
+  docker(['pause', db]);
+  const start = performance.now();
+  try {
+    const r = runner('info', {}, false);
+    const elapsed = performance.now() - start;
+    assert.equal(r.error, undefined, 'Runner must exit by itself before the 180s harness guard');
+    assert.notEqual(r.status, null);
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /Flyway failed/); // Reject config/Compose errors as timing evidence.
+    assert.ok(elapsed < 90000, `Unavailable engine took ${Math.round(elapsed)} ms`);
+    t.diagnostic(`unavailable engine: ${Math.round(elapsed)} ms, exit ${r.status}`);
+  } finally { docker(['unpause', db]); }
+});
+
+test('REV-03: socket read timeout terminates a real blocked history query', async t => {
+  const tag = 'customers_socket_timeout_fixture';
+  docker(['exec', '-d', '-e', 'PGPASSWORD', db, 'psql', '-X', '-h', '127.0.0.1', '-U', 'postgres', '-d', 'synkro',
+    '-v', 'ON_ERROR_STOP=1', '-c', `SET application_name='${tag}'; BEGIN; LOCK TABLE customers_schema.flyway_schema_history IN ACCESS EXCLUSIVE MODE; SELECT pg_sleep(120); ROLLBACK;`],
+  { variables: { PGPASSWORD: adminPassword } });
+  try {
+    let locked = false;
+    for (let i = 0; i < 20; i++) {
+      if (value(`SELECT count(*) FROM pg_locks l JOIN pg_stat_activity a USING(pid) WHERE a.application_name='${tag}' AND l.mode='AccessExclusiveLock' AND l.granted`) === '1') { locked = true; break; }
+      await new Promise(r => setTimeout(r, 100));
+    }
+    assert.ok(locked, 'Fixture must hold the actual history lock before timing the runner');
+    const start = performance.now();
+    const r = runner('info', { FLYWAY_URL: 'jdbc:postgresql://synkro-db:5432/synkro?connectTimeout=5&socketTimeout=2' }, false);
+    const elapsed = performance.now() - start;
+    assert.equal(r.error, undefined);
+    assert.notEqual(r.status, null);
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /Flyway failed/);
+    assert.ok(elapsed >= 2000 && elapsed < 30000, `Blocked read took ${Math.round(elapsed)} ms`);
+    t.diagnostic(`blocked history read: ${Math.round(elapsed)} ms, exit ${r.status}`);
+  } finally { sql(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name='${tag}'`); }
+  runner('validate');
+});
+
+test('REV-04: checksum drift is rejected and the original history can still validate', () => {
+  const checksum = value("SELECT checksum FROM customers_schema.flyway_schema_history WHERE version='002'");
+  assert.match(checksum, /^-?\d+$/);
+  const before = history();
+  sql("UPDATE customers_schema.flyway_schema_history SET checksum=checksum+1 WHERE version='002'");
+  try {
+    const r = runner('validate', {}, false);
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /Flyway failed/);
+  } finally { sql(`UPDATE customers_schema.flyway_schema_history SET checksum=${checksum} WHERE version='002'`); }
+  assert.equal(history(), before);
+  runner('validate');
+});
+
+test('REV-05: URL bounds cannot be disabled or replaced with credential properties', () => {
+  for (const query of ['connectTimeout=0', 'connectTimeout=6', 'socketTimeout=0', 'socketTimeout=61',
+    'loginTimeout=0', 'loginTimeout=11', 'socketTimeout=2&socketTimeout=0', 'password=forbidden', 'currentSchema=public', 'socketTimeout=2&']) {
+    const r = runner('info', { FLYWAY_URL: `jdbc:postgresql://synkro-db:5432/synkro?${query}` }, false);
+    assert.equal(r.status, 2, `Unsafe URL properties must fail configuration validation: ${query}`);
+    assert.ok(!`${r.stdout}${r.stderr}`.includes('forbidden'));
+  }
 });
 
 test('CLI-DB-10: reverse every U, preserve external objects and users, rebuild and validate', () => {
