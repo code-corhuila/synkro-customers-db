@@ -31,6 +31,11 @@ BEGIN
   IF pg_catalog.to_regclass('public.flyway_schema_history') IS NOT NULL THEN
     RAISE EXCEPTION 'Legacy public history requires manual reconciliation';
   END IF;
+  IF EXISTS (SELECT FROM pg_catalog.pg_roles
+             WHERE rolname IN ('customers_reader', 'customers_writer')
+             AND (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)) THEN
+    RAISE EXCEPTION 'Unsafe existing Customers role; reconcile role ownership and privileges';
+  END IF;
 END
 $preflight$;
 """

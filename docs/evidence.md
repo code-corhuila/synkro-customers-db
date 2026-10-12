@@ -4,6 +4,9 @@ Fecha: 2026-10-12. Base develop: a098042426f259270d9ba28728212872fd2c1b4f.
 Rama histórica: codex/hu-cli-02-customers-db (90b0229, PR #2).
 Rama vigente: feat/customers-schema-and-migration-runner; el ciclo posterior
 está separado en corrections-evidence.md. Este archivo preserva el ciclo original.
+La continuación desde 3498ab2 y sus resultados nuevos están al final de
+corrections-evidence.md; los verdes históricos siguientes no se reutilizan
+como validación de esa continuación.
 
 ## Antes de implementar SQL y runner
 
