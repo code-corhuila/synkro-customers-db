@@ -104,7 +104,7 @@ docker compose --env-file env/dev.env run --rm -T customers-db-migrate migrate
 docker compose --env-file env/dev.env run --rm -T customers-db-migrate validate
 ```
 
-Contrato consultado: [handoff de infraestructura](https://github.com/code-corhuila/synkro-infra-postgres/blob/7731dc3c4e077b15a98254ddf56777195f1bd5dd/docs/owner-handoffs/customers-db.md).
+Contrato consultado: [handoff de infraestructura](https://github.com/code-corhuila/synkro-infra-postgres/blob/b2fbfbd9ea3f81b451d66ba85465d0c5a4f8656f/docs/owner-handoffs/customers-db.md).
 Para incluir ambos archivos desde la raíz, usar:
 
 ```yaml
@@ -135,6 +135,11 @@ atomicidad, permisos, aislamiento, errores, repetición y U inversas/reconstrucc
 Usa include externo y elimina sus recursos y secretos al terminar. Si el proceso
 es interrumpido forzosamente, revisar customers-test-* y .test-run/ antes de limpiarlos.
 El CI conserva check-common-files y agrega migration-rebuild.
+También se activa por push a feat/customers-schema-and-migration-runner,
+conservando los eventos de PR y ramas permanentes. El checkout del job de
+migraciones obtiene el historial para reproducir la base de 90b0229.
+CONT-03 prueba actualización desde ese commit con datos sintéticos e historial
+inalterados; CONT-04/05 prueban roles preexistentes y dependencias inesperadas.
 
 V001–V007: esquema, customer, idempotency_key, FK, índice, roles, grants. Una
 secuencia global en DDL/DML/DCL/TCL, cada V con U en 05_rollbacks/misma familia.
@@ -143,9 +148,13 @@ undo (no disponible en Community) ni clean. Las U destruyen datos y se prueban
 solo en instancias desechables; en qa/main preferir V correctiva y backup.
 
 Rama de entrega: `feat/customers-schema-and-migration-runner`. Se conserva el
-commit revisado 90b0229. Por instrucción del usuario, las rutas y el contenido
-de todas las V/U permanecen idénticos: el traslado de 00_schemas a 01_schemas
-queda BLOCKED hasta confirmar posibles aplicaciones persistentes.
+commit revisado 90b0229 y la autoría de Sergio. V001/U001 ahora están en
+01_ddl/01_schemas y 05_rollbacks/01_ddl/01_schemas; los nombres, versiones y
+bytes de los catorce SQL se conservan. Flyway 10.20.1 valida y migra una base
+creada desde el original sin cambiar historial/checksums/datos. No se consultó
+ninguna base persistente. Un historial previo puede conservar 00_schemas en
+script; no necesita repair. El preflight comprueba reader/writer NOLOGIN y sin
+privilegios de instancia peligrosos también en ejecuciones sin V pendientes.
 
 [Diseño y matriz](docs/design.md) · [Recuperación](docs/recovery.md) ·
 [Handoff de infraestructura/API](docs/handoff.md) · [Evidencia histórica](docs/evidence.md) ·

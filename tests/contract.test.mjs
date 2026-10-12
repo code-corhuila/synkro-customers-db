@@ -18,6 +18,7 @@ test('CONT-02: CI can validate the delivery branch before a PR, preserving perma
   assert.match(workflow, /push:\s*\n\s*branches: \[develop, qa, main, feat\/customers-schema-and-migration-runner\]/);
   assert.match(workflow, /pull_request:\s*\n\s*branches: \[develop, qa, main\]/);
   assert.match(workflow, /run: node --test --test-concurrency=1 tests\/integration.test.mjs/);
+  assert.match(workflow, /migration-rebuild:[\s\S]*uses: actions\/checkout@v4\s*\n\s*with:\s*\n\s*fetch-depth: 0/);
 });
 export function sqlFiles(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(e =>
@@ -31,7 +32,10 @@ test('CONT-06: every historical SQL byte and CODEOWNERS remain intact', () => {
     const historical = relative(root, path).replaceAll('\\', '/').replace('/01_schemas/', '/00_schemas/');
     const blob = spawnSync('git', ['show', `90b02296f7b057a4cfc6fbe6be4f78afe7cbe9a4:${historical}`], { cwd: root });
     assert.equal(blob.status, 0);
-    assert.deepEqual(readFileSync(path), blob.stdout, historical);
+    if (historical === '.github/CODEOWNERS') {
+      // Git text=auto checks this file out as CRLF on Windows; never rewrite it.
+      assert.equal(readFileSync(path, 'utf8').replaceAll('\r\n', '\n'), blob.stdout.toString('utf8'), historical);
+    } else assert.deepEqual(readFileSync(path), blob.stdout, historical);
   }
 });
 

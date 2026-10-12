@@ -1,39 +1,43 @@
-# Matriz de aceptación — correcciones de HU-CLI-02
+# Matriz de aceptación — continuación de HU-CLI-02
 
-Rama: feat/customers-schema-and-migration-runner. Evidencia original en
-evidence.md y ciclo posterior en corrections-evidence.md. PASS aquí significa
-verificación del repositorio con PostgreSQL desechable, no despliegue aprobado.
+Rama: feat/customers-schema-and-migration-runner. Validación nueva desde
+3498ab2 (2026-10-12), independiente de los verdes históricos de Sergio.
+Evidencia original en evidence.md; correcciones y continuación en
+corrections-evidence.md. PASS se limita al repositorio y fixtures.
 
-| ID | Repositorio | Evidencia concreta |
+| ID | Estado | Evidencia |
 |---|---|---|
-| CLI-DB-01 | PASS | integration.test.mjs: CLI-DB-01/09/12, siete V en base vacía |
-| CLI-DB-02 | PASS | CLI-DB-02, datos e historial completo idénticos al repetir |
-| CLI-DB-03 | PASS | CLI-DB-03/04, defaults y campos opcionales NULL |
-| CLI-DB-04 | PASS | CLI-DB-03/04, cada límite aprobado y exceso rechazado |
-| CLI-DB-05 | PASS | CLI-DB-05, baja lógica conserva fila y unicidad permanente |
-| CLI-DB-06 | PASS | CLI-DB-06, key 7/8/128/129, FK, índice y rollback atómico |
-| CLI-DB-07 | PASS | CLI-DB-07/08, sesiones TCP app/reader con permisos efectivos |
-| CLI-DB-08 | PASS | CLI-DB-07/08, aislamiento frente a usuarios y esquema centinela |
-| CLI-DB-09 | PASS | CLI-DB-01/09/12, historia exclusiva; REV-04 rechaza checksum alterado |
-| CLI-DB-10 | PASS | CLI-DB-10, todas las U inversas y reconstrucción completa |
-| CLI-DB-11 | PASS | Dos grupos CLI-DB-11 y REV-02/03/05: autenticación, configuración, secretos y límites reales |
-| CLI-DB-12 | PASS | REV-01: include externo, perfil, red, montaje y contrato FLYWAY; ambos modos de contraseña |
-| CLI-DB-13 | BLOCKED | Rama publicada; creación de PR rechazada. Workflow solo PR/ramas permanentes: no hay ejecución del SHA nuevo |
-| CLI-DB-14 | PASS | contract.test.mjs: inventario V/U; diff contra 90b0229 vacío para SQL y CODEOWNERS |
+| CLI-DB-01 | PASS | Siete V en PostgreSQL vacío; solo dos tablas de negocio |
+| CLI-DB-02 | PASS | Segunda migrate conserva datos e historial completo; CONT-03 desde 90b0229 |
+| CLI-DB-03 | PASS | UUID/defaults/NULL opcionales y cliente válido |
+| CLI-DB-04 | PASS | Límites aprobados, NOT NULL, documento duplicado rechazado |
+| CLI-DB-05 | PASS | Baja lógica conserva fila y unicidad incluso inactivo |
+| CLI-DB-06 | PASS | key 7/8/128/129, PK, FK RESTRICT/índice, transacción conjunta y rollback |
+| CLI-DB-07 | PASS | Sesiones TCP SCRAM reales app/reader: SELECT/INSERT/UPDATE |
+| CLI-DB-08 | PASS | DELETE/TRUNCATE/DDL/historial prohibidos; otros usuarios y centinela aislados |
+| CLI-DB-09 | PASS | Historial exclusivo; drift rechazado; CONT-03 conserva cada fila/checksum tras traslado |
+| CLI-DB-10 | PASS | Siete U inversas, reconstrucción, repetición; CONT-05 bloquea dependencias sin CASCADE |
+| CLI-DB-11 | PASS | Configuración/autenticación/conectividad/secreto, límites reales, CONT-04 roles inseguros incluso no-op |
+| CLI-DB-12 | PASS | Include externo, tooling, red externa, montaje solo lectura, variables y secretos |
+| CLI-DB-13 | BLOCKED | Push de rama habilitado; falta verificar CI del SHA publicado de la continuación |
+| CLI-DB-14 | PASS | Bytes de los 14 SQL, nombres/versiones, CODEOWNERS e historial/autoría conservados; CONT-01/06 |
 
-Los nombres de prueba remiten a [integración](../tests/integration.test.mjs)
-y [contrato](../tests/contract.test.mjs). La nomenclatura 01_schemas es una
-corrección separada **BLOCKED**, no queda satisfecha por el inventario V/U.
+Pruebas: [integración](../tests/integration.test.mjs) y
+[contrato](../tests/contract.test.mjs). V001/U001 en 01_schemas;
+las otras seis parejas mantienen familia. DML/TCL y espejos tienen placeholders,
+sin migraciones vacías. Primera ejecución: 6/6 estáticas y 17/17 integración,
+0 fallos/omisiones; evidencia final posterior en corrections-evidence.md.
 
-| Frontera | Estado | Alcance y siguiente responsable |
+| Frontera | Estado | Siguiente acción |
 |---|---|---|
-| Repositorio y fixtures | PASS | Restricciones, permisos, repetición, rollback/rebuild y contrato externo |
-| Esquema centinela | PASS | Conservación e inaccesibilidad comprobadas con usuarios reales; no son migraciones completas de otros dominios |
-| Plataforma real | BLOCKED | Ángel: pin aprobado e integración en raíz, PostgreSQL publicado 16.15-alpine3.23; fixture 16.6-alpine |
-| Customers API | BLOCKED | Equipo API: consumo real, transacción cliente+clave, manejo de conflicto y baja lógica; SQL no acredita endpoints |
-| Migraciones persistentes/ruta | BLOCKED | Responsables deben confirmar aplicaciones de 90b0229; rutas y bytes preservados por orden del usuario |
-| Conciliación documental | BLOCKED | Handoff para synkro-docs #244; no se editó ni cerró otro repositorio/issue |
+| Repositorio / fixtures | PASS | Validación técnica local; CI pendiente |
+| Traslado 00_schemas → 01_schemas | PASS | CONT-03, Flyway 10.20.1 original y estructura propuesta, misma base y datos intactos |
+| Centinela | PASS | Prueba del repositorio; no integra todos los dominios |
+| Plataforma real | BLOCKED | Ángel revisa/aprueba pin y ejecuta composición raíz; fixture 16.6, infraestructura 16.15 |
+| Customers API | BLOCKED | Equipo API integra persistencia y HTTP; no implementado aquí |
+| Conciliación documental | BLOCKED | Preparación en handoff.md para #244/backlog, sin editar synkro-docs |
 
-**NOT READY** para revisión final: falta resolver la familia del esquema y
-confirmar CI del SHA publicado (PR de sustitución preparado, no creado). Las fronteras de plataforma/API también quedan
-explícitas; no se consideran realizadas por esta suite. PR #2 permanece en borrador.
+**NOT READY** mientras falte CI de la continuación. La preparación técnica
+para revisión no cierra la HU ni acredita revisión humana, integración aprobada,
+Customers API o plataforma completa. PR #2 se encontró cerrado sin merge;
+no hay PR abierto para la rama actual. Descripción preparada en pull-request.md.
