@@ -1,0 +1,45 @@
+# Correcciones posteriores a 90b0229
+
+Base revisada: `90b02296f7b057a4cfc6fbe6be4f78afe7cbe9a4`, conservada como ancestro.
+Rama: `feat/customers-schema-and-migration-runner`.
+
+## Conciliación (2026-10-12)
+
+El remoto y la copia local coincidían en el SHA revisado; no había cambios
+locales ni commits ajenos adicionales. El PR #2 seguía abierto y en borrador.
+GitHub cierra un PR al renombrar su rama head; no se ejecutó esa operación.
+Se conserva #2 y su rama, y se prepara un PR de sustitución explícito.
+
+Infraestructura: handoff leído en
+`synkro-infra-postgres@7731dc3c4e077b15a98254ddf56777195f1bd5dd`, rama
+`feat/postgres-bootstrap-and-root-composition`,
+`docs/owner-handoffs/customers-db.md` (blob 7b8ee1de40380d701bbbe9b8a0531bd0c5b32200).
+También se consultaron compose.postgres.yml y scripts/operations.py:
+servicio synkro-db, base synkro; URL raíz con connectTimeout=5 y socketTimeout=60.
+La copia local y develop solo contienen archivos comunes (22ddd80bbd5c781190e79cca19ae864c1f297633).
+No se modificó infraestructura ni se ejecutó la composición completa.
+
+El usuario no conoce posibles aplicaciones persistentes y ordenó conservar
+rutas. Se mantienen V001/U001 en 00_schemas. Las pruebas históricas y el handoff
+solo acreditan fixtures y una dependencia pendiente; no prueban que nadie haya
+migrado manualmente. **Traslado a 01_schemas BLOCKED** hasta inventario confirmado
+por los responsables. No se consultan ni modifican bases persistentes.
+
+## Rojo antes de implementar las correcciones
+
+- `node --test tests/contract.test.mjs`: 1 PASS, 2 FAIL. Falta .env.example;
+  faltan propiedades JDBC connectTimeout/loginTimeout/socketTimeout.
+- `node --test --test-name-pattern=REV-01 tests/integration.test.mjs`: 1 FAIL,
+  13 omitidas por filtro. PostgreSQL temporal arrancó; Compose terminó con 1
+  al usar la interfaz publicada FLYWAY_* / customers-db-migrate sin secreto obligatorio.
+- REV-02…05 ya escritas antes del cambio de runner: límites reales con motor
+  pausado y consulta bloqueada, drift de checksum y propiedades URL inseguras.
+  No se presentan las pruebas filtradas como ejecutadas.
+
+El ciclo original está conservado en evidence.md: rojo de inventario, bloqueo
+Docker, rojo de autenticación y ejecuciones posteriores. No hay evidencia de
+rojo funcional del modelo completo antes de la implementación inicial.
+
+## Verde y publicación
+
+Pendientes de registrar después de implementar y ejecutar la revisión.
