@@ -18,7 +18,7 @@ verificación del repositorio con PostgreSQL desechable, no despliegue aprobado.
 | CLI-DB-10 | PASS | CLI-DB-10, todas las U inversas y reconstrucción completa |
 | CLI-DB-11 | PASS | Dos grupos CLI-DB-11 y REV-02/03/05: autenticación, configuración, secretos y límites reales |
 | CLI-DB-12 | PASS | REV-01: include externo, perfil, red, montaje y contrato FLYWAY; ambos modos de contraseña |
-| CLI-DB-13 | BLOCKED | CI del nuevo SHA pendiente de publicación; resultado y enlace se registran en el PR |
+| CLI-DB-13 | BLOCKED | Rama publicada; creación de PR rechazada. Workflow solo PR/ramas permanentes: no hay ejecución del SHA nuevo |
 | CLI-DB-14 | PASS | contract.test.mjs: inventario V/U; diff contra 90b0229 vacío para SQL y CODEOWNERS |
 
 Los nombres de prueba remiten a [integración](../tests/integration.test.mjs)
@@ -35,5 +35,5 @@ corrección separada **BLOCKED**, no queda satisfecha por el inventario V/U.
 | Conciliación documental | BLOCKED | Handoff para synkro-docs #244; no se editó ni cerró otro repositorio/issue |
 
 **NOT READY** para revisión final: falta resolver la familia del esquema y
-confirmar CI del SHA publicado. Las fronteras de plataforma/API también quedan
-explícitas; no se consideran realizadas por esta suite. PR permanece en borrador.
+confirmar CI del SHA publicado (PR de sustitución preparado, no creado). Las fronteras de plataforma/API también quedan
+explícitas; no se consideran realizadas por esta suite. PR #2 permanece en borrador.
