@@ -4,3 +4,5 @@
 .idea/
 .DS_Store
 *.log
+.test-run/
+secrets/

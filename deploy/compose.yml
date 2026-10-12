@@ -1,0 +1,29 @@
+services:
+  customers-migrate:
+    image: flyway/flyway:10.20.1
+    profiles: [tooling]
+    working_dir: /workspace
+    entrypoint: ["/bin/sh", "/workspace/scripts/migrate.sh"]
+    command: [migrate]
+    restart: "no"
+    environment:
+      FLYWAY_URL: ${CUSTOMERS_FLYWAY_URL:-}
+      FLYWAY_USER: ${DB_ADMIN_USER:-}
+      FLYWAY_PASSWORD_FILE: /run/secrets/customers_db_admin_password
+    secrets:
+      - customers_db_admin_password
+    volumes:
+      - type: bind
+        source: ..
+        target: /workspace
+        read_only: true
+    networks: [platform]
+
+secrets:
+  customers_db_admin_password:
+    file: ${CUSTOMERS_DB_ADMIN_PASSWORD_FILE:?Set CUSTOMERS_DB_ADMIN_PASSWORD_FILE to a protected absolute file path}
+
+networks:
+  platform:
+    external: true
+    name: ${PLATFORM_NETWORK:-platform}
