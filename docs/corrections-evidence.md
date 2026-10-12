@@ -68,4 +68,14 @@ Verde local final (2026-10-12):
 - Entornos exclusivamente desechables, con eliminación de recursos y archivos
   temporales por el teardown. Ninguna base persistente consultada ni modificada.
 
-CI del nuevo SHA pendiente de publicación; se actualizará con enlace verificable.
+Publicación: push normal de `aec323fdc41867feefdc426f5196e22cae39a593` a
+feat/customers-schema-and-migration-runner. La creación del PR de sustitución
+fue rechazada por la herramienta (user rejected MCP tool call); no se creó ni
+se intentó por otra vía. #2 y su rama permanecen abiertos/en borrador e intactos.
+La descripción de sustitución queda preparada en pull-request.md.
+
+**CI nuevo BLOCKED:** el workflow solo se dispara por pull_request o push a
+develop/qa/main, no por push a esta rama. No se modifican ramas permanentes ni
+se atribuye al SHA nuevo el CI exitoso de 90b0229. Falta una ejecución remota
+autorizada mediante el PR correspondiente. El commit documental posterior
+registra esta limitación sin cambiar el código probado.
