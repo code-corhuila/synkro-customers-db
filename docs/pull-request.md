@@ -1,5 +1,8 @@
 ## Cambios
 
+Descripción preparada para la sustitución de #2. La rama está publicada, pero
+la creación del nuevo PR fue rechazada: este documento no acredita un PR creado.
+
 HU-CLI-02 entrega customer e idempotency_key, permisos limitados e historial
 exclusivo. Esta revisión conserva 90b0229 y alinea el ejecutor con el handoff
 publicado de infraestructura: customers-db-migrate, FLYWAY_URL/USER/PASSWORD,
@@ -24,6 +27,8 @@ una referencia nueva sin reescritura ni borrado.
   motor pausado 29.020 s y lectura bloqueada 6.269 s, salida propia 1 en ambos.
 - CI del SHA publicado y enlace de ejecución: se agregan a la descripción remota
   tras verificar ambos jobs, sin atribuir al SHA nuevo el CI histórico.
+- CI nuevo BLOCKED: workflow solo por PR o push a ramas permanentes. No se
+  alteraron esos disparadores ni se publicaron cambios en ramas permanentes.
 
 ## Pendientes y alcance
 
