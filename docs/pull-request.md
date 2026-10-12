@@ -35,6 +35,12 @@ usuarios LOGIN nuevos, semillas ni cambios de infraestructura o synkro-docs.
 - Resultados nuevos locales/CI y limpieza: docs/corrections-evidence.md.
   Matriz CLI-DB-01…14: docs/acceptance.md. SHA y enlace remoto se entregan en
   el informe final; usar la ejecución de ese SHA, no 90b0229.
+- Código validado/publicado: d4637877b650f0918ca74b6594c266f8f54e0b56.
+  Local final: 6/6 estáticas y 17/17 integración, 0 fallos/omisiones, 237.210 s.
+  [CI 38293018044](https://github.com/code-corhuila/synkro-customers-db/actions/runs/38293018044):
+  check-common-files y migration-rebuild SUCCESS; 6/6 y 17/17, 0 omitidas.
+  El commit documental de entrega conserva este código; su SHA/CI propios se
+  adjuntan desde el informe final al publicar manualmente el PR.
 - El intento original de integración previo al SQL estuvo bloqueado por Docker.
   Se conserva esa limitación; no se fabrica TDD funcional original.
 
@@ -55,9 +61,9 @@ Workflow accede a Customers mediante la API.
 
 - [x] Correcciones nuevas con pruebas previas y evidencia roja/verde separada
 - [x] SQL histórico y CODEOWNERS conservados; traslado compatible probado
-- [x] Primera ejecución local completa: 6 estáticas / 17 integración, sin omisiones
-- [ ] CI del SHA final publicado verificado (informe de entrega)
+- [x] Validación local final: 6 estáticas / 17 integración, sin omisiones
+- [x] CI del código publicado verificado; SHA/CI de entrega final en informe
 - [ ] Revisión y aprobación humana; integración y conciliación documental
 
-Estado técnico actual: NOT READY hasta confirmar el CI de la continuación.
+Estado técnico: READY FOR REVIEW; revisión e integración aprobadas pendientes.
 Refs code-corhuila/synkro-docs#244; sin cierre automático.
