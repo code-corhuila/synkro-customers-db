@@ -21,3 +21,19 @@ test('CLI-DB-10/14: global versions have matching, family-preserving reversions'
     assert.ok(readFileSync(inverse, 'utf8').trim());
   }
 });
+
+test('REV-06: root example exposes both credential modes without a committed password', () => {
+  const example = readFileSync(resolve(root, '.env.example'), 'utf8');
+  for (const key of ['FLYWAY_URL', 'FLYWAY_USER', 'FLYWAY_PASSWORD', 'FLYWAY_PASSWORD_FILE',
+    'CUSTOMERS_FLYWAY_URL', 'DB_ADMIN_USER', 'CUSTOMERS_DB_ADMIN_PASSWORD_FILE', 'COMPOSE_PROJECT_NAME', 'PLATFORM_NETWORK']) {
+    assert.match(example, new RegExp(`^${key}=`, 'm'));
+  }
+  assert.match(example, /^FLYWAY_PASSWORD=$/m);
+});
+
+test('REV-07: JDBC connection, login and socket limits have safe finite defaults', () => {
+  const config = readFileSync(resolve(root, 'flyway.toml'), 'utf8');
+  assert.match(config, /jdbcProperties\.connectTimeout\s*=\s*"5"/);
+  assert.match(config, /jdbcProperties\.loginTimeout\s*=\s*"10"/);
+  assert.match(config, /jdbcProperties\.socketTimeout\s*=\s*"60"/);
+});
