@@ -117,3 +117,45 @@ hubo aplicaciones persistentes. Esa aplicación sigue desconocida y no se
 consultó ninguna base persistente. El historial puede conservar 00_schemas en
 script: Flyway 10.20.1 valida el traslado sin cambiar esa fila ni checksum.
 Esta regresión nueva no constituye TDD de la implementación original.
+
+## Continuación — implementación y verificación
+
+Commit de pruebas/evidencia previa: `62e7a22`. Solo después se trasladaron
+V001/U001, se agregaron placeholders DML/TCL espejo, preflight de roles
+inseguros en cada ejecución y push de esta rama al CI. CONT-02 se amplió primero
+para exigir fetch-depth: 0: FAIL antes de agregarlo, necesario para reproducir
+90b0229 en un checkout CI. Se conservaron eventos anteriores, permisos read y
+ambos jobs obligatorios. No se cambió configuración de GitHub.
+
+CONT-06 inicialmente detectó CRLF de CODEOWNERS en Windows por text=auto;
+se corrigió el arnés para comparar ese archivo normalizado por Git, sin tocarlo.
+Todos los SQL se comparan byte por byte, incluso los trasladados. Este fallo
+del test no se presenta como defecto de producción. CONT-05 se precisó para
+revocar los grants propios/dropear la FK dentro de la transacción de prueba:
+el bloqueo queda atribuible a la dependencia externa y se comprueba rollback.
+
+Primera ejecución verde después del cambio: 6/6 estáticas, 17/17 grupos de
+integración, 0 fallos/omisiones, 246.596 s. Motor pausado 28 344 ms; lectura
+bloqueada 5 942 ms; salida propia 1 en ambos. Una ejecución final posterior
+verifica también el CONT-05 precisado; se registra abajo cuando termina.
+
+Entorno de continuación: Windows, Node 25.7.0, Docker Engine 29.3.1;
+PostgreSQL 16.6-alpine y Flyway 10.20.1, mismos digests fijados en evidence.md.
+CI usa Node 22. No se atribuyen los 3/14 PASS anteriores a estos cambios.
+
+Validación local final de código/pruebas (2026-10-12):
+
+- `node --test tests/contract.test.mjs`: **6/6 PASS**, 0 FAIL/omisiones.
+- `node --test --test-concurrency=1 tests/integration.test.mjs`:
+  **17/17 PASS**, 0 FAIL/omisiones, **237.210 s**. Incluye CONT-05 precisado.
+- Motor pausado **28 621 ms**, lectura bloqueada **5 676 ms**, salida propia 1;
+  no timeout del arnés. Primera aplicación, repetición y reconstrucción PASS.
+- Include externo, compose config con tooling, red/montajes/ambos modos de
+  contraseña y precedencias PASS mediante REV-01; no se publica config sensible.
+- Node syntax, git diff --check, actionlint PASS. ShellCheck 0.10.0 sin errores
+  ni warnings; su nota informativa SC2015 sobre A && B || fail es intencional:
+  fallar si el archivo no existe o no es legible. No se modificó ese wrapper.
+- CONT-06 PASS: catorce SQL idénticos byte a byte a 90b0229, con las dos rutas
+  nuevas, CODEOWNERS normalizado por Git intacto. No se editó otro repositorio.
+
+Publicación y CI de la continuación se registran después de verificar el remoto.

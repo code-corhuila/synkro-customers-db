@@ -11,6 +11,9 @@
 - Flyway (código propagado): comprobar salud/red, autenticación administrativa,
   customers_app provisionado sin privilegios elevados, historia legacy en public
   y checksums con validate.
+- El preflight rechaza reader/writer preexistentes con LOGIN o privilegios de
+  instancia peligrosos en cada ejecución, incluso sin V pendientes. No los
+  modifica ni elimina: un administrador debe reconciliarlos explícitamente.
 - El wrapper oculta logs SQL/JDBC porque pueden incluir secretos o datos. El
   operador diagnostica en una sesión administrativa protegida y comparte solo
   el código/categoría, nunca credenciales ni filas de clientes.
@@ -24,8 +27,12 @@
 ## Entornos con datos
 
 Esta corrección solo ejecuta pruebas desechables. No existe confirmación de
-aplicación persistente de 90b0229: conservar todas las V/U y sus rutas hasta
-inventario acordado con responsables; no hacer repair ni alterar historial.
+aplicación persistente de 90b0229. El traslado 00_schemas → 01_schemas conserva
+los nombres, versiones y bytes de V001/U001; CONT-03 demostró validate/migrate
+en una misma base creada desde el original con Flyway 10.20.1. El historial
+existente puede seguir indicando 00_schemas: no cambiarlo ni ejecutar repair.
+Ante una incompatibilidad distinta, detener y diagnosticar; no forzar baseline,
+clean o reparación para pasar validate.
 
 En qa/main, infraestructura obtiene y verifica el backup antes de migrar, fuera
 de los repositorios. Un backup fallido detiene el despliegue. Ensayar su

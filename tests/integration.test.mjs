@@ -166,11 +166,11 @@ test('CONT-05: safe existing roles are preserved and unexpected rollback depende
   sql(readFileSync(resolve(root, '03_dcl/00_roles/V006__create_roles.sql'), 'utf8'));
   assert.equal(value("SELECT oid FROM pg_roles WHERE rolname IN ('customers_reader','customers_writer') ORDER BY rolname"), roleIds);
   sql('GRANT USAGE ON SCHEMA other_schema TO customers_reader');
-  try { reject(`BEGIN; ${readFileSync(resolve(root, '05_rollbacks/03_dcl/00_roles/U006__create_roles.sql'), 'utf8')} COMMIT;`, '2BP01', 'postgres'); }
+  try { reject(`BEGIN; ${readFileSync(resolve(root, '05_rollbacks/03_dcl/01_grants/U007__grant_permissions.sql'), 'utf8')} ${readFileSync(resolve(root, '05_rollbacks/03_dcl/00_roles/U006__create_roles.sql'), 'utf8')} COMMIT;`, '2BP01', 'postgres'); }
   finally { sql('REVOKE USAGE ON SCHEMA other_schema FROM customers_reader'); }
   assert.equal(value("SELECT oid FROM pg_roles WHERE rolname IN ('customers_reader','customers_writer') ORDER BY rolname"), roleIds);
   sql('CREATE VIEW other_schema.customer_dependency AS SELECT customer_id FROM customers_schema.customer');
-  try { reject(`BEGIN; ${readFileSync(resolve(root, '05_rollbacks/01_ddl/03_tables/U002__create_customer.sql'), 'utf8')} COMMIT;`, '2BP01', 'postgres'); }
+  try { reject(`BEGIN; ALTER TABLE customers_schema.idempotency_key DROP CONSTRAINT fk_idempotency_key_customer; ${readFileSync(resolve(root, '05_rollbacks/01_ddl/03_tables/U002__create_customer.sql'), 'utf8')} COMMIT;`, '2BP01', 'postgres'); }
   finally { sql('DROP VIEW other_schema.customer_dependency'); }
   assert.equal(value('SELECT id FROM other_schema.sentinel'), '42');
   runner('validate');
