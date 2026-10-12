@@ -1,5 +1,8 @@
 # Correcciones posteriores a 90b0229
 
+> Registro histórico de Sergio. La continuación actual se documenta al final;
+> sus resultados y estados sustituyen los bloqueos históricos para esta entrega.
+
 Base revisada: `90b02296f7b057a4cfc6fbe6be4f78afe7cbe9a4`, conservada como ancestro.
 Rama: `feat/customers-schema-and-migration-runner`.
 
@@ -79,3 +82,38 @@ develop/qa/main, no por push a esta rama. No se modifican ramas permanentes ni
 se atribuye al SHA nuevo el CI exitoso de 90b0229. Falta una ejecución remota
 autorizada mediante el PR correspondiente. El commit documental posterior
 registra esta limitación sin cambiar el código probado.
+
+## Continuación — pruebas previas a los cambios (2026-10-12)
+
+Inicio limpio en 3498ab26cc146011a7b28027283a434e2671b26d, misma rama y remoto.
+90b0229, 2db2b7e, aec323f y 3498ab2 son ancestros; autores intactos.
+PR #2 está cerrado sin merge, aún draft, head codex/hu-cli-02-customers-db;
+la rama histórica ya no aparece en ls-remote y no hay PR abierto para la rama vigente.
+
+Antes de corregir código:
+
+- Contrato: CONT-01 y CONT-02 FAIL (familia/placeholders y disparador push);
+  tres controles existentes PASS. CONT-06 añadido para comparar los bytes de
+  todos los SQL y CODEOWNERS contra 90b0229.
+- Integración filtrada CONT: CONT-03/05 PASS y CONT-04 FAIL porque migrate
+  devolvió 0 después de ALTER ROLE customers_reader LOGIN. La prueba restaura
+  NOLOGIN en finally. Solo tres pruebas seleccionadas; no es la suite completa.
+- CONT-03 se refinó antes de producción para montar una copia propuesta con
+  01_schemas. Reejecución aislada PASS, 23.265 s total: original extraído desde
+  90b0229, PostgreSQL tmpfs propio, Flyway 10.20.1 original, datos sintéticos en
+  ambas tablas, validate/migrate con la carpeta propuesta, historial entero y
+  datos idénticos. No repair/baseline/clean ni manipulación de historial.
+- Historial original version/script/checksum:
+  001:00_schemas/V001__create_customers_schema.sql:1501799604;
+  002:03_tables/V002__create_customer.sql:-812018864;
+  003:03_tables/V003__create_idempotency_key.sql:-1281968613;
+  004:04_alter/V004__add_foreign_keys.sql:-48311283;
+  005:10_indexes/V005__create_indexes.sql:-2090867766;
+  006:00_roles/V006__create_roles.sql:2008003005;
+  007:01_grants/V007__grant_permissions.sql:1821486826.
+
+La compatibilidad demostrada permite el traslado autorizado sin averiguar si
+hubo aplicaciones persistentes. Esa aplicación sigue desconocida y no se
+consultó ninguna base persistente. El historial puede conservar 00_schemas en
+script: Flyway 10.20.1 valida el traslado sin cambiar esa fila ni checksum.
+Esta regresión nueva no constituye TDD de la implementación original.

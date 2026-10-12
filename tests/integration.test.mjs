@@ -2,7 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, cpSync, existsSync, renameSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // No external database URL is accepted: all destructive checks own a fresh container.
@@ -107,6 +107,73 @@ test('CLI-DB-01/09/12: external composition migrates empty PostgreSQL with exclu
 
 test('CLI-DB-11: real application authentication rejects an incorrect password', () => {
   assert.notEqual(sql('SELECT current_user', 'customers_app', false, 'incorrect-test-password').status, 0);
+});
+
+test('CONT-03: original commit database validates after relocation without changing history or data', t => {
+  const original = resolve(work, 'original');
+  const commit = '90b02296f7b057a4cfc6fbe6be4f78afe7cbe9a4';
+  const listing = spawnSync('git', ['ls-tree', '-r', '--name-only', commit], { cwd: root, encoding: 'utf8' });
+  assert.equal(listing.status, 0);
+  for (const path of listing.stdout.trim().split('\n')) {
+    const blob = spawnSync('git', ['show', `${commit}:${path}`], { cwd: root });
+    assert.equal(blob.status, 0);
+    const target = resolve(original, path);
+    mkdirSync(resolve(target, '..'), { recursive: true });
+    writeFileSync(target, blob.stdout);
+  }
+  // Separate database, on this suite's own tmpfs instance. No persistent URL accepted.
+  sql('CREATE DATABASE original_test');
+  const originalSql = query => docker(['exec', '-i', '-e', 'PGPASSWORD', db, 'psql', '-X', '-h', '127.0.0.1',
+    '-U', 'postgres', '-d', 'original_test', '-v', 'ON_ERROR_STOP=1', '-At'], { input: query, variables: { PGPASSWORD: adminPassword } }).stdout.trim();
+  const originalEnv = { CUSTOMERS_FLYWAY_URL: 'jdbc:postgresql://synkro-db:5432/original_test',
+    DB_ADMIN_USER: 'postgres', CUSTOMERS_DB_ADMIN_PASSWORD_FILE: resolve(work, 'admin.secret') };
+  docker(['compose', '-f', resolve(original, 'deploy/compose.yml'), 'run', '--rm', '-T', 'customers-migrate', 'migrate'], { variables: originalEnv });
+  originalSql("INSERT INTO customers_schema.customer(name,identity_document) VALUES ('Synthetic','relocation-proof'); INSERT INTO customers_schema.idempotency_key(key,customer_id) SELECT 'relocation-proof-key', customer_id FROM customers_schema.customer;");
+  const snapshot = () => originalSql('SELECT row_to_json(h) FROM customers_schema.flyway_schema_history h ORDER BY installed_rank');
+  const rows = () => originalSql('SELECT row_to_json(c) FROM customers_schema.customer c; SELECT row_to_json(k) FROM customers_schema.idempotency_key k');
+  const before = snapshot(), data = rows();
+  assert.equal(originalSql("SELECT count(*) FROM customers_schema.flyway_schema_history WHERE type='SQL' AND success"), '7');
+  t.diagnostic(`original version/script/checksums: ${originalSql("SELECT version || ':' || script || ':' || checksum FROM customers_schema.flyway_schema_history WHERE type='SQL' ORDER BY installed_rank").replaceAll('\n', ', ')}`);
+  const proposed = resolve(work, 'proposed');
+  mkdirSync(proposed);
+  for (const path of ['01_ddl', '02_dml', '03_dcl', '04_tcl', 'flyway.toml', 'scripts']) cpSync(resolve(root, path), resolve(proposed, path), { recursive: true });
+  const oldFamily = resolve(proposed, '01_ddl/00_schemas');
+  if (existsSync(oldFamily)) renameSync(oldFamily, resolve(proposed, '01_ddl/01_schemas'));
+  assert.ok(existsSync(resolve(proposed, '01_ddl/01_schemas/V001__create_customers_schema.sql')));
+  for (const command of ['validate', 'migrate']) runner(command, { FLYWAY_URL: 'jdbc:postgresql://synkro-db:5432/original_test' }, true, ['-v', `${proposed}:/workspace:ro`]);
+  assert.equal(snapshot(), before);
+  assert.equal(rows(), data);
+  originalSql('REVOKE ALL ON SCHEMA customers_schema FROM customers_reader,customers_writer; REVOKE ALL ON customers_schema.customer,customers_schema.idempotency_key FROM customers_reader,customers_writer');
+  sql('DROP DATABASE original_test');
+});
+
+test('CONT-04: unsafe preexisting roles block even a no-op runner without altering them', () => {
+  runner();
+  const before = history();
+  for (const role of ['customers_reader', 'customers_writer']) {
+    sql(`ALTER ROLE ${role} LOGIN`);
+    try {
+      assert.notEqual(runner('migrate', {}, false).status, 0);
+      assert.equal(value(`SELECT rolcanlogin FROM pg_roles WHERE rolname='${role}'`), 't');
+      assert.equal(history(), before);
+    } finally { sql(`ALTER ROLE ${role} NOLOGIN`); }
+  }
+  runner('validate');
+});
+
+test('CONT-05: safe existing roles are preserved and unexpected rollback dependencies fail atomically', () => {
+  const roleIds = value("SELECT oid FROM pg_roles WHERE rolname IN ('customers_reader','customers_writer') ORDER BY rolname");
+  sql(readFileSync(resolve(root, '03_dcl/00_roles/V006__create_roles.sql'), 'utf8'));
+  assert.equal(value("SELECT oid FROM pg_roles WHERE rolname IN ('customers_reader','customers_writer') ORDER BY rolname"), roleIds);
+  sql('GRANT USAGE ON SCHEMA other_schema TO customers_reader');
+  try { reject(`BEGIN; ${readFileSync(resolve(root, '05_rollbacks/03_dcl/00_roles/U006__create_roles.sql'), 'utf8')} COMMIT;`, '2BP01', 'postgres'); }
+  finally { sql('REVOKE USAGE ON SCHEMA other_schema FROM customers_reader'); }
+  assert.equal(value("SELECT oid FROM pg_roles WHERE rolname IN ('customers_reader','customers_writer') ORDER BY rolname"), roleIds);
+  sql('CREATE VIEW other_schema.customer_dependency AS SELECT customer_id FROM customers_schema.customer');
+  try { reject(`BEGIN; ${readFileSync(resolve(root, '05_rollbacks/01_ddl/03_tables/U002__create_customer.sql'), 'utf8')} COMMIT;`, '2BP01', 'postgres'); }
+  finally { sql('DROP VIEW other_schema.customer_dependency'); }
+  assert.equal(value('SELECT id FROM other_schema.sentinel'), '42');
+  runner('validate');
 });
 
 test('CLI-DB-02: repeat migration preserves both data and complete history', () => {
