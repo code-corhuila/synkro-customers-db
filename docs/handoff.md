@@ -3,6 +3,13 @@
 ## Ángel / HU-INF-02
 
 - Rama: feat/customers-schema-and-migration-runner, con 90b0229 como ancestro.
+- Código validado/publicado: `d4637877b650f0918ca74b6594c266f8f54e0b56`.
+  Local final: 6/6 estáticas, 17/17 integración, 0 fallos/omisiones, 237.210 s.
+  [CI 38293018044](https://github.com/code-corhuila/synkro-customers-db/actions/runs/38293018044)
+  del mismo SHA: ambos jobs SUCCESS, 6/6 y 17/17; integración 96.987 s.
+  El commit documental posterior conserva el código. El informe final entrega
+  el SHA completo de entrega y verifica su CI; Ángel revisa ese candidato y
+  registra únicamente el SHA aprobado/merge resultante, sin cambiar pins aquí.
 - Contrato vigente leído en [infra@b2fbfbd](https://github.com/code-corhuila/synkro-infra-postgres/blob/b2fbfbd9ea3f81b451d66ba85465d0c5a4f8656f/docs/owner-handoffs/customers-db.md),
   rama feat/postgres-bootstrap-and-root-composition. develop aún es esqueleto.
 - Entrega: deploy/compose.yml, customers-db-migrate, perfil tooling, Flyway 10.20.1,
