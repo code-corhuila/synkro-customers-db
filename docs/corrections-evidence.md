@@ -1,0 +1,188 @@
+# Correcciones posteriores a 90b0229
+
+> Registro histórico de Sergio. La continuación actual se documenta al final;
+> sus resultados y estados sustituyen los bloqueos históricos para esta entrega.
+
+Base revisada: `90b02296f7b057a4cfc6fbe6be4f78afe7cbe9a4`, conservada como ancestro.
+Rama: `feat/customers-schema-and-migration-runner`.
+
+## Conciliación (2026-10-12)
+
+El remoto y la copia local coincidían en el SHA revisado; no había cambios
+locales ni commits ajenos adicionales. El PR #2 seguía abierto y en borrador.
+Según [GitHub](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-branches-in-your-repository/renaming-a-branch),
+renombrar la rama head cierra su PR; no se ejecutó esa operación.
+Se conserva #2 y su rama, y se prepara un PR de sustitución explícito.
+
+Infraestructura: handoff leído en
+`synkro-infra-postgres@7731dc3c4e077b15a98254ddf56777195f1bd5dd`, rama
+`feat/postgres-bootstrap-and-root-composition`,
+`docs/owner-handoffs/customers-db.md` (blob 7b8ee1de40380d701bbbe9b8a0531bd0c5b32200).
+También se consultaron compose.postgres.yml y scripts/operations.py:
+servicio synkro-db, base synkro; URL raíz con connectTimeout=5 y socketTimeout=60.
+La copia local y develop solo contienen archivos comunes (22ddd80bbd5c781190e79cca19ae864c1f297633).
+No se modificó infraestructura ni se ejecutó la composición completa.
+
+El usuario no conoce posibles aplicaciones persistentes y ordenó conservar
+rutas. Se mantienen V001/U001 en 00_schemas. Las pruebas históricas y el handoff
+solo acreditan fixtures y una dependencia pendiente; no prueban que nadie haya
+migrado manualmente. **Traslado a 01_schemas BLOCKED** hasta inventario confirmado
+por los responsables. No se consultan ni modifican bases persistentes.
+
+## Rojo antes de implementar las correcciones
+
+- `node --test tests/contract.test.mjs`: 1 PASS, 2 FAIL. Falta .env.example;
+  faltan propiedades JDBC connectTimeout/loginTimeout/socketTimeout.
+- `node --test --test-name-pattern=REV-01 tests/integration.test.mjs`: 1 FAIL,
+  13 omitidas por filtro. PostgreSQL temporal arrancó; Compose terminó con 1
+  al usar la interfaz publicada FLYWAY_* / customers-db-migrate sin secreto obligatorio.
+- REV-02…05 ya escritas antes del cambio de runner: límites reales con motor
+  pausado y consulta bloqueada, drift de checksum y propiedades URL inseguras.
+  No se presentan las pruebas filtradas como ejecutadas.
+
+El ciclo original está conservado en evidence.md: rojo de inventario, bloqueo
+Docker, rojo de autenticación y ejecuciones posteriores. No hay evidencia de
+rojo funcional del modelo completo antes de la implementación inicial.
+
+## Verde y publicación
+
+Las pruebas rojas y este registro se guardaron en el commit adicional `2db2b7e`,
+antes de modificar Compose, wrapper, configuración o ejemplos. No hubo amend,
+rebase ni force-push.
+
+Dos ejecuciones iniciales posteriores dieron 3/3 estáticas y 13/14 integración.
+REV-01 requirió corregir el propio test: activar tooling al inspeccionar config
+y no comparar una contraseña con la representación escapada de Compose (`$`).
+La contraseña exacta ya se verifica mediante migración real con SCRAM. No se
+atribuyen esos dos fallos del arnés al código de producción. En ambas ejecuciones
+pasaron motor pausado, lectura bloqueada, drift y reconstrucción.
+
+Verde local final (2026-10-12):
+
+- `node --test tests/contract.test.mjs`: **3/3 PASS**, sin omisiones.
+- REV-01 aislada: 1 PASS, 13 omitidas por filtro, 39.3 s.
+- `node --test --test-concurrency=1 tests/integration.test.mjs`: **14/14 PASS**,
+  0 FAIL, 0 omitidas, 210.8 s. Incluye restricciones, permisos efectivos, SCRAM,
+  secretos, include externo, repetición y U inversas/reconstrucción completa.
+- Motor pausado: 29 020 ms, salida propia 1, menor que 90 s; lectura bloqueada:
+  6 269 ms, salida propia 1, menor que 30 s. Ninguna dependió del timeout de 180 s.
+- Sintaxis Node y git diff --check correctos. Diff contra 90b0229 vacío para
+  DDL/DML/DCL/TCL, U y CODEOWNERS: rutas y contenido históricos intactos.
+- Entornos exclusivamente desechables, con eliminación de recursos y archivos
+  temporales por el teardown. Ninguna base persistente consultada ni modificada.
+
+Publicación: push normal de `aec323fdc41867feefdc426f5196e22cae39a593` a
+feat/customers-schema-and-migration-runner. La creación del PR de sustitución
+fue rechazada por la herramienta (user rejected MCP tool call); no se creó ni
+se intentó por otra vía. #2 y su rama permanecen abiertos/en borrador e intactos.
+La descripción de sustitución queda preparada en pull-request.md.
+
+**CI nuevo BLOCKED:** el workflow solo se dispara por pull_request o push a
+develop/qa/main, no por push a esta rama. No se modifican ramas permanentes ni
+se atribuye al SHA nuevo el CI exitoso de 90b0229. Falta una ejecución remota
+autorizada mediante el PR correspondiente. El commit documental posterior
+registra esta limitación sin cambiar el código probado.
+
+## Continuación — pruebas previas a los cambios (2026-10-12)
+
+Inicio limpio en 3498ab26cc146011a7b28027283a434e2671b26d, misma rama y remoto.
+90b0229, 2db2b7e, aec323f y 3498ab2 son ancestros; autores intactos.
+PR #2 está cerrado sin merge, aún draft, head codex/hu-cli-02-customers-db;
+la rama histórica ya no aparece en ls-remote y no hay PR abierto para la rama vigente.
+
+Antes de corregir código:
+
+- Contrato: CONT-01 y CONT-02 FAIL (familia/placeholders y disparador push);
+  tres controles existentes PASS. CONT-06 añadido para comparar los bytes de
+  todos los SQL y CODEOWNERS contra 90b0229.
+- Integración filtrada CONT: CONT-03/05 PASS y CONT-04 FAIL porque migrate
+  devolvió 0 después de ALTER ROLE customers_reader LOGIN. La prueba restaura
+  NOLOGIN en finally. Solo tres pruebas seleccionadas; no es la suite completa.
+- CONT-03 se refinó antes de producción para montar una copia propuesta con
+  01_schemas. Reejecución aislada PASS, 23.265 s total: original extraído desde
+  90b0229, PostgreSQL tmpfs propio, Flyway 10.20.1 original, datos sintéticos en
+  ambas tablas, validate/migrate con la carpeta propuesta, historial entero y
+  datos idénticos. No repair/baseline/clean ni manipulación de historial.
+- Historial original version/script/checksum:
+  001:00_schemas/V001__create_customers_schema.sql:1501799604;
+  002:03_tables/V002__create_customer.sql:-812018864;
+  003:03_tables/V003__create_idempotency_key.sql:-1281968613;
+  004:04_alter/V004__add_foreign_keys.sql:-48311283;
+  005:10_indexes/V005__create_indexes.sql:-2090867766;
+  006:00_roles/V006__create_roles.sql:2008003005;
+  007:01_grants/V007__grant_permissions.sql:1821486826.
+
+La compatibilidad demostrada permite el traslado autorizado sin averiguar si
+hubo aplicaciones persistentes. Esa aplicación sigue desconocida y no se
+consultó ninguna base persistente. El historial puede conservar 00_schemas en
+script: Flyway 10.20.1 valida el traslado sin cambiar esa fila ni checksum.
+Esta regresión nueva no constituye TDD de la implementación original.
+
+## Continuación — implementación y verificación
+
+Commit de pruebas/evidencia previa: `62e7a22`. Solo después se trasladaron
+V001/U001, se agregaron placeholders DML/TCL espejo, preflight de roles
+inseguros en cada ejecución y push de esta rama al CI. CONT-02 se amplió primero
+para exigir fetch-depth: 0: FAIL antes de agregarlo, necesario para reproducir
+90b0229 en un checkout CI. Se conservaron eventos anteriores, permisos read y
+ambos jobs obligatorios. No se cambió configuración de GitHub.
+
+CONT-06 inicialmente detectó CRLF de CODEOWNERS en Windows por text=auto;
+se corrigió el arnés para comparar ese archivo normalizado por Git, sin tocarlo.
+Todos los SQL se comparan byte por byte, incluso los trasladados. Este fallo
+del test no se presenta como defecto de producción. CONT-05 se precisó para
+revocar los grants propios/dropear la FK dentro de la transacción de prueba:
+el bloqueo queda atribuible a la dependencia externa y se comprueba rollback.
+
+Primera ejecución verde después del cambio: 6/6 estáticas, 17/17 grupos de
+integración, 0 fallos/omisiones, 246.596 s. Motor pausado 28 344 ms; lectura
+bloqueada 5 942 ms; salida propia 1 en ambos. Una ejecución final posterior
+verifica también el CONT-05 precisado; se registra abajo cuando termina.
+
+Entorno de continuación: Windows, Node 25.7.0, Docker Engine 29.3.1;
+PostgreSQL 16.6-alpine y Flyway 10.20.1, mismos digests fijados en evidence.md.
+CI usa Node 22. No se atribuyen los 3/14 PASS anteriores a estos cambios.
+
+Validación local final de código/pruebas (2026-10-12):
+
+- `node --test tests/contract.test.mjs`: **6/6 PASS**, 0 FAIL/omisiones.
+- `node --test --test-concurrency=1 tests/integration.test.mjs`:
+  **17/17 PASS**, 0 FAIL/omisiones, **237.210 s**. Incluye CONT-05 precisado.
+- Motor pausado **28 621 ms**, lectura bloqueada **5 676 ms**, salida propia 1;
+  no timeout del arnés. Primera aplicación, repetición y reconstrucción PASS.
+- Include externo, compose config con tooling, red/montajes/ambos modos de
+  contraseña y precedencias PASS mediante REV-01; no se publica config sensible.
+- Node syntax, git diff --check, actionlint PASS. ShellCheck 0.10.0 sin errores
+  ni warnings; su nota informativa SC2015 sobre A && B || fail es intencional:
+  fallar si el archivo no existe o no es legible. No se modificó ese wrapper.
+- CONT-06 PASS: catorce SQL idénticos byte a byte a 90b0229, con las dos rutas
+  nuevas, CODEOWNERS normalizado por Git intacto. No se editó otro repositorio.
+
+Publicación y CI de la continuación se registran después de verificar el remoto.
+
+## Continuación — publicación, CI y limpieza verificados
+
+Push normal de `d4637877b650f0918ca74b6594c266f8f54e0b56` a
+feat/customers-schema-and-migration-runner; remoto exacto confirmado.
+[CI 38293018044](https://github.com/code-corhuila/synkro-customers-db/actions/runs/38293018044),
+evento push, mismo SHA, completed/success:
+
+- check-common-files SUCCESS (5 s).
+- migration-rebuild SUCCESS (1m56s): checkout completo, Node 22, contrato
+  **6/6 PASS**, imágenes fijadas, integración **17/17 PASS**, 0 FAIL/omisiones,
+  **96.987 s**. Motor pausado 26 164 ms, lectura bloqueada 3 309 ms, salida 1.
+- No se reutilizó el CI histórico de 90b0229. PR abiertos reconsultados: ninguno.
+  #2 ya estaba cerrado; no se creó/cerró/fusionó PR ni se recreó su rama.
+
+Limpieza local verificada: no containers/redes customers-test-* ni verificadores
+customers-check-*; directorios originales/propuestos y archivos de contraseña
+eliminados por teardown; fuentes temporales y .test-run vacío eliminados.
+Inventario de nueve contenedores y diez redes existentes igual al inicial.
+No consultas ni cambios de bases persistentes, volúmenes, pins, CODEOWNERS,
+configuraciones GitHub, ramas permanentes u otros repositorios.
+
+El commit documental posterior registra estos resultados sin modificar el código
+validado. El SHA completo final y el CI de ese mismo SHA se verifican tras su
+push y se entregan en el informe final, evitando una referencia circular al
+propio commit. READY FOR REVIEW técnico; aprobación humana, integración raíz,
+Customers API y conciliación/cierre documental siguen separados.
