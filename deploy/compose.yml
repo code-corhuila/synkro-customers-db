@@ -1,0 +1,25 @@
+services:
+  customers-db-migrate:
+    image: flyway/flyway:10.20.1
+    profiles: [tooling]
+    working_dir: /workspace
+    entrypoint: ["/bin/sh", "/workspace/scripts/migrate.sh"]
+    command: [migrate]
+    restart: "no"
+    environment:
+      FLYWAY_URL: ${FLYWAY_URL:-${CUSTOMERS_FLYWAY_URL:-}}
+      FLYWAY_USER: ${FLYWAY_USER:-${DB_ADMIN_USER:-}}
+      FLYWAY_PASSWORD: ${FLYWAY_PASSWORD:-}
+      FLYWAY_PASSWORD_FILE: ${FLYWAY_PASSWORD_FILE:-}
+    volumes:
+      - type: bind
+        source: ..
+        target: /workspace
+        read_only: true
+        bind: {create_host_path: false}
+    networks: [platform]
+
+networks:
+  platform:
+    external: true
+    name: ${PLATFORM_NETWORK:-platform}
