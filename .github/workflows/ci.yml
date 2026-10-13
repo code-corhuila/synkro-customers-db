@@ -2,9 +2,12 @@ name: ci
 
 on:
   push:
-    branches: [develop, qa, main]
+    branches: [develop, qa, main, feat/customers-schema-and-migration-runner]
   pull_request:
     branches: [develop, qa, main]
+
+permissions:
+  contents: read
 
 jobs:
   check-common-files:
@@ -19,3 +22,22 @@ jobs:
           test -f .github/CODEOWNERS
           test -f .github/pull_request_template.md
           echo "Common files present."
+
+  migration-rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify paired migrations
+        run: node --test tests/contract.test.mjs
+      - name: Pull pinned images
+        run: |
+          docker pull postgres:16.6-alpine
+          docker pull flyway/flyway:10.20.1
+      - name: PostgreSQL acceptance, permissions and reconstruction
+        run: node --test --test-concurrency=1 tests/integration.test.mjs
