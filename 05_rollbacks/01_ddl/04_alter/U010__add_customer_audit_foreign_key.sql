@@ -1,0 +1,1 @@
+ALTER TABLE customers_schema.customer_audit DROP CONSTRAINT fk_customer_audit_customer;

@@ -1,0 +1,1 @@
+ALTER TABLE customers_schema.customer DROP CONSTRAINT chk_customer_contacts_required;
