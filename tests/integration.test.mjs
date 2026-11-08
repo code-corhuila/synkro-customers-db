@@ -51,10 +51,10 @@ function runner(command = 'migrate', overrides = {}, ok = true, extra = [], file
   return r;
 }
 const history = () => value('SELECT row_to_json(h) FROM customers_schema.flyway_schema_history h ORDER BY installed_rank');
-// HU-CLI-05: every new registration carries complete contacts. The first seven migrations are the
-// historical ones (never edited); V008-V013 are additive.
+// HU-CLI-05: the first seven migrations are the historical ones (never edited); V008-V014 are additive and compatible with
+// the previous API. The contacts CHECK is NOT a migration yet (scripts/pending-activation, exercised by CONT-07).
 const HISTORICAL = 7;
-const MIGRATIONS = '13';
+const MIGRATIONS = '14';
 const contacts = "'cliente@example.test','3001234567','Calle 1 # 2-3'";
 const insert = (doc = randomUUID().slice(0, 24)) => `INSERT INTO customers_schema.customer(name,identity_document,email,phone,address) VALUES ('Cliente',${literal(doc)},${contacts}) RETURNING customer_id`;
 
@@ -144,7 +144,8 @@ test('CONT-03: original commit database validates after relocation without chang
     INSERT INTO customers_schema.idempotency_key(key,customer_id) SELECT 'relocation-proof-key', customer_id FROM customers_schema.customer WHERE identity_document='relocation-proof';
     INSERT INTO customers_schema.idempotency_key(key,customer_id) SELECT 'legacy-inactive-key', customer_id FROM customers_schema.customer WHERE identity_document='legacy-inactive';`);
   const snapshot = () => originalSql('SELECT row_to_json(h) FROM customers_schema.flyway_schema_history h ORDER BY installed_rank');
-  const rows = () => originalSql('SELECT row_to_json(c) FROM customers_schema.customer c ORDER BY identity_document; SELECT row_to_json(k) FROM customers_schema.idempotency_key k ORDER BY key');
+  // The original columns only: V012 adds the generated search columns, which never carried data of their own.
+  const rows = () => originalSql('SELECT row_to_json(c) FROM (SELECT customer_id,name,identity_document,email,phone,address,registration_date,active FROM customers_schema.customer ORDER BY identity_document) c; SELECT row_to_json(k) FROM customers_schema.idempotency_key k ORDER BY key');
   const originalAs = (user, query, ok = true) => docker(['exec', '-i', '-e', 'PGPASSWORD', db, 'psql', '-X', '-h', '127.0.0.1',
     '-U', user, '-d', 'original_test', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=sqlstate', '-At'], { input: query, ok, variables: { PGPASSWORD: appPassword } });
   const before = snapshot(), data = rows();
@@ -169,14 +170,14 @@ test('CONT-03: original commit database validates after relocation without chang
   originalAs('customers_app', "UPDATE customers_schema.customer SET name='Legacy renamed' WHERE identity_document='relocation-proof'");
   originalAs('customers_app', "UPDATE customers_schema.customer SET active=false WHERE identity_document='legacy-short-phone'; UPDATE customers_schema.customer SET active=true WHERE identity_document='legacy-inactive'");
   assert.equal(originalSql("SELECT count(*) FROM customers_schema.customer WHERE identity_document='legacy-inactive' AND active AND email IS NULL"), '1');
-  // New registrations must be complete; the same unique document/UUID rules still apply.
+  // Expansion only: the database does not (yet) require contacts, so a write by the PREVIOUS API (no contacts, or the
+  // loose formats it accepted) is still stored. The API enforces completeness; the CHECK is pending activation.
   const newRow = (fields) => `INSERT INTO customers_schema.customer(name,identity_document,email,phone,address) VALUES ('Nuevo',${literal(randomUUID().slice(0, 24))},${fields})`;
-  for (const bad of ["NULL,'3001234567','Calle 1'", "'a@example.test',NULL,'Calle 1'", "'a@example.test','3001234567',NULL",
-    "'a@example.test','12345','Calle 1'", "'a@example.test','30012345678','Calle 1'", "'a@example.test','300 123 4567','Calle 1'",
-    "'a@example.test','3001234567','   '", "'   ','3001234567','Calle 1'", "'not-an-email','3001234567','Calle 1'"]) {
-    assert.match(originalAs('customers_app', newRow(bad), false).stderr, /\b23514\b/, bad);
-  }
+  for (const legacyWrite of ["NULL,NULL,NULL", "'a@example.test','300-123-4567','Calle 1'", "'   ','3001234567','Calle 1'"]) originalAs('customers_app', newRow(legacyWrite));
+  assert.match(originalAs('customers_app', newRow(`'a@example.test','${'1'.repeat(21)}','Calle 1'`), false).stderr, /\b23514\b/);   // the original length limits still apply
   originalAs('customers_app', newRow(contacts));
+  // The stored search columns were backfilled by the migration for rows written before it existed.
+  assert.equal(originalSql("SELECT count(*) FROM customers_schema.customer WHERE name_search IS DISTINCT FROM customers_schema.fold_search_text(name) OR document_search IS DISTINCT FROM customers_schema.fold_search_text(identity_document)"), '0');
   assert.match(originalAs('customers_app', `INSERT INTO customers_schema.customer(name,identity_document,email,phone,address) VALUES ('Dup','legacy-inactive',${contacts})`, false).stderr, /\b23505\b/);
   // Audit table: append-only for the application login, tied to existing customers.
   originalAs('customers_app', "INSERT INTO customers_schema.customer_audit(customer_id,action,actor_id) SELECT customer_id,'REACTIVATED','00000000-0000-4000-8000-000000000001' FROM customers_schema.customer WHERE identity_document='legacy-inactive'");
@@ -226,7 +227,7 @@ test('CLI-DB-02: repeat migration preserves both data and complete history', () 
   assert.equal(value('SELECT row_to_json(c) FROM customers_schema.customer c ORDER BY customer_id'), rows);
 });
 
-test('CLI-DB-03/04 + HU-CLI-05: defaults, required contacts and every approved text boundary', () => {
+test('CLI-DB-03/04 + HU-CLI-05: defaults, length boundaries and previous-API-compatible contacts', () => {
   const customer = sql(insert(), 'customers_app').stdout.trim().split('\n')[0];
   assert.match(customer, /^[0-9a-f-]{36}$/);
   const defaults = sql("SELECT customer_id IS NOT NULL AND registration_date <= now() AND active AND email='cliente@example.test' AND phone='3001234567' AND address IS NOT NULL FROM customers_schema.customer WHERE identity_document='repeat-migration'", 'customers_app').stdout.trim();
@@ -242,20 +243,15 @@ test('CLI-DB-03/04 + HU-CLI-05: defaults, required contacts and every approved t
     { address: 'x' }, { address: 'x'.repeat(255) }, { address: 'Carrera 7 # 45-10, Bogotá' },
   ];
   for (const over of accepted) sql(row(over), 'customers_app');
+  // Length limits of the original schema still apply. Contact completeness and format are NOT enforced here (pending
+  // activation, CONT-07): the previous API may still write contactless or loosely formatted customers.
   const rejected = [
     { name: '' }, { name: 'x'.repeat(151) }, { identity_document: '' }, { identity_document: 'x'.repeat(31) },
-    // contacts are required for every registration after the cut-over: NULL, empty and blank
-    { email: null }, { phone: null }, { address: null }, { email: '' }, { phone: '' }, { address: '' },
-    { email: '   ' }, { address: '   ' }, { address: '\t\n' }, { phone: ' ' },
-    // email shape and length
-    { email: emailOf(256) }, { email: 'no-at-sign' }, { email: 'a@b' }, { email: 'a b@example.com' }, { email: 'a@@example.com' },
-    { email: '@example.com' }, { email: 'a@.com' }, { email: ' a@example.com' }, { email: 'a@example.com ' },
-    // phone: exactly ten ASCII digits
-    { phone: '123456789' }, { phone: '12345678901' }, { phone: '30012345a7' }, { phone: '+573001234567' }, { phone: '300.1234567' },
-    { phone: '300 123 4567' }, { phone: '300-123-4567' }, { phone: '٣٠٠١٢٣٤٥٦٧' },
-    { phone: '3001234567\n' }, { address: 'x'.repeat(256) },
+    { email: emailOf(256) }, { phone: '1'.repeat(21) }, { address: 'x'.repeat(256) },
   ];
   for (const over of rejected) reject(row(over), '23514');
+  for (const over of [{ email: null }, { phone: null }, { address: null }, { email: '' }, { phone: '300-123-4567' }, { email: 'no-at-sign' }, { address: '   ' }])
+    sql(row({ ...over, identity_document: 'legacy-' + randomUUID().slice(0, 12) }), 'customers_app');
   for (const column of ['customer_id', 'name', 'identity_document', 'registration_date', 'active']) {
     const fields = { name: "'Cliente'", identity_document: literal(randomUUID().slice(0,24)), [column]: 'NULL' };
     reject(`INSERT INTO customers_schema.customer(${Object.keys(fields).join(',')}) VALUES (${Object.values(fields).join(',')})`, '23502');
@@ -341,6 +337,69 @@ test('HU-CLI-05: search folding is immutable, case/accent-insensitive and availa
   sql('CREATE INDEX proof_fold ON customers_schema.customer (customers_schema.fold_search_text(name)); DROP INDEX customers_schema.proof_fold');
   // The search-path of the function is pinned: a hostile schema cannot shadow lower/translate.
   assert.match(value("SELECT array_to_string(proconfig, ',') FROM pg_proc WHERE proname='fold_search_text' AND pronamespace='customers_schema'::regnamespace"), /search_path=pg_catalog/);
+});
+
+test('HU-CLI-05: stored search columns are generated, folded, indexed and never writable by the application', () => {
+  const doc = 'BÚSQUEDA-' + randomUUID().slice(0, 8);
+  const fields = (name, document) => `'${name}',${literal(document)},'cliente@example.test','3001234567','Calle 1'`;
+  sql(`INSERT INTO customers_schema.customer(name,identity_document,email,phone,address) VALUES (${fields('María Ñuñez', doc)})`, 'customers_app');
+  const read = d => sql(`SELECT name_search || '|' || document_search FROM customers_schema.customer WHERE identity_document=${literal(d)}`, 'customers_app').stdout.trim();
+  assert.equal(read(doc), `maria nunez|${doc.replace('Ú', 'u').toLowerCase()}`);
+  // The database recomputes them on UPDATE; they cannot disagree with the source columns.
+  sql(`UPDATE customers_schema.customer SET name='José PÉREZ' WHERE identity_document=${literal(doc)}`, 'customers_app');
+  assert.equal(read(doc).split('|')[0], 'jose perez');
+  assert.equal(value('SELECT count(*) FROM customers_schema.customer WHERE name_search IS DISTINCT FROM customers_schema.fold_search_text(name) OR document_search IS DISTINCT FROM customers_schema.fold_search_text(identity_document)'), '0');
+  // Generated columns: no application (current or previous) can write them.
+  reject(`INSERT INTO customers_schema.customer(name,identity_document,name_search) VALUES ('x',${literal('g-' + randomUUID().slice(0, 8))},'forced')`, '428C9');
+  reject(`UPDATE customers_schema.customer SET document_search='forced' WHERE identity_document=${literal(doc)}`, '428C9');
+  // Layout: C collation for the document (btree equality and range), default collation for the ordering column, one index.
+  assert.equal(value("SELECT string_agg(column_name || '=' || coalesce(collation_name,'default') || ':' || is_generated, ',' ORDER BY column_name) FROM information_schema.columns WHERE table_schema='customers_schema' AND table_name='customer' AND column_name IN ('name_search','document_search')"), 'document_search=C:ALWAYS,name_search=default:ALWAYS');
+  assert.match(value("SELECT indexdef FROM pg_indexes WHERE schemaname='customers_schema' AND indexname='idx_customer_document_search'"), /\(document_search\)/);
+  assert.equal(value("SELECT count(*) FROM pg_indexes WHERE schemaname='customers_schema' AND tablename='customer' AND indexdef ILIKE '%name_search%'"), '0');
+  // The planner can use it for exact and prefix (range) lookups.
+  for (const where of ["document_search = 'x'", "document_search >= 'x' AND document_search < 'x' || chr(1114111)"])
+    assert.match(sql(`SET enable_seqscan=off; EXPLAIN (COSTS OFF) SELECT 1 FROM customers_schema.customer WHERE ${where}`, 'customers_app').stdout, /idx_customer_document_search/);
+});
+
+test('CONT-07: the prepared contacts CHECK is outside every migration and works when activated (pending activation)', () => {
+  const pending = file => readFileSync(resolve(root, 'scripts/pending-activation', file), 'utf8');
+  sql('CREATE DATABASE activation_test');
+  try {
+    runner('migrate', { FLYWAY_URL: 'jdbc:postgresql://synkro-db:5432/activation_test' });
+    const psql = (user, password, query, ok = true) => docker(['exec', '-i', '-e', 'PGPASSWORD', db, 'psql', '-X', '-h', '127.0.0.1', '-U', user, '-d', 'activation_test',
+      '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=sqlstate', '-At'], { input: query, ok, variables: { PGPASSWORD: password } });
+    const admin = query => psql('postgres', adminPassword, query).stdout.trim();
+    const app = (query, ok = true) => psql('customers_app', appPassword, query, ok);
+    const row = over => {
+      const f = { name: 'Cliente', identity_document: randomUUID().slice(0, 24), email: 'a@example.test', phone: '3001234567', address: 'Calle 1', ...over };
+      return `INSERT INTO customers_schema.customer(${Object.keys(f).join(',')}) VALUES (${Object.values(f).map(v => v === null ? 'NULL' : literal(v)).join(',')})`;
+    };
+    const constraint = "SELECT count(*) FROM pg_constraint WHERE conname='chk_customer_contacts_required'";
+    // Historical customers written before activation, without contacts.
+    admin("INSERT INTO customers_schema.customer(name,identity_document,active) VALUES ('Historical','hist-active',true),('Historical','hist-inactive',false)");
+    const applied = admin("SELECT count(*) FROM customers_schema.flyway_schema_history WHERE type='SQL' AND success");
+    assert.equal(applied, MIGRATIONS);
+    assert.equal(admin(constraint), '0');                                       // not applied by Flyway
+    app(row({ email: null, phone: null, address: null }));                      // previous-API write: stored
+    admin(pending('require-contacts-check.sql'));
+    assert.equal(admin(constraint), '1');
+    runner('validate', { FLYWAY_URL: 'jdbc:postgresql://synkro-db:5432/activation_test' });   // history/checksums untouched
+    assert.equal(admin("SELECT count(*) FROM customers_schema.flyway_schema_history WHERE type='SQL' AND success"), applied);
+    // Historical rows stay operable: rename, deactivate, reactivate, with incomplete contacts and without inventing any.
+    app("UPDATE customers_schema.customer SET name='Renamed' WHERE identity_document='hist-active'; UPDATE customers_schema.customer SET active=false WHERE identity_document='hist-active'; UPDATE customers_schema.customer SET active=true WHERE identity_document='hist-inactive'");
+    assert.equal(admin("SELECT count(*) FROM customers_schema.customer WHERE identity_document LIKE 'hist-%' AND email IS NULL AND phone IS NULL AND address IS NULL"), '2');
+    const rejected = [
+      { email: null }, { phone: null }, { address: null }, { email: '' }, { phone: '' }, { address: '' }, { email: '   ' }, { address: '   ' }, { address: '\t\n' }, { phone: ' ' },
+      { email: 'no-at-sign' }, { email: 'a@b' }, { email: 'a b@example.com' }, { email: 'a@@example.com' }, { email: '@example.com' }, { email: 'a@.com' }, { email: ' a@example.com' }, { email: 'a@example.com ' },
+      { phone: '123456789' }, { phone: '12345678901' }, { phone: '30012345a7' }, { phone: '+573001234567' }, { phone: '300.1234567' }, { phone: '300 123 4567' }, { phone: '300-123-4567' }, { phone: '٣٠٠١٢٣٤٥٦٧' }, { phone: '3001234567\n' },
+    ];
+    for (const over of rejected) assert.match(app(row(over), false).stderr, /\b23514\b/, JSON.stringify(over));
+    for (const over of [{}, { email: 'a@b.co' }, { phone: '0123456789' }, { address: 'Carrera 7 # 45-10, Bogotá' }]) app(row(over));
+    // Rollback script removes it and contactless writes work again (the previous API is usable again).
+    admin(pending('require-contacts-check.rollback.sql'));
+    assert.equal(admin(constraint), '0');
+    app(row({ email: null, phone: null, address: null }));
+  } finally { sql('DROP DATABASE activation_test', 'postgres', false); }
 });
 
 test('HU-CLI-05: customer_audit is append-only for the app, readable by the reader, private to other domains', () => {
