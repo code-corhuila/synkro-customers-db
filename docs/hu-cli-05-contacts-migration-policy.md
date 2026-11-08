@@ -38,8 +38,9 @@ histórico incompleto se completa en el momento en que alguien lo edita. Desacti
 4. Con `incomplete_rows_blocking_the_definitive_constraint = 0`, una migración posterior reemplaza V011 por la
    restricción incondicional (`DROP CONSTRAINT` + `ADD CONSTRAINT` sin exención) sin editar V011.
 
-Estado actual: el inventario de qa/main **no se ejecutó** desde este trabajo (no se consultó ninguna base persistente);
-queda como tarea del dueño antes de promover.
+Estado actual: en **dev** se consultó, solo en lectura y con agregados, el inventario previo: 4 clientes (3 activos,
+1 inactivo) y 0 con contactos faltantes o inválidos. En **qa/main no se consultó ninguna base**; el inventario queda como
+tarea del dueño de datos antes de promover.
 
 ## 4. Despliegue y reversa
 
