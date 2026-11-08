@@ -156,6 +156,17 @@ ninguna base persistente. Un historial previo puede conservar 00_schemas en
 script; no necesita repair. El preflight comprueba reader/writer NOLOGIN y sin
 privilegios de instancia peligrosos también en ejecuciones sin V pendientes.
 
+## HU-CLI-05: contactos obligatorios, búsqueda y reactivación
+
+V008–V013 son **aditivas** (no editan V001–V007 ni sus checksums): función de plegado `fold_search_text`, tabla
+`customer_audit` (solo SELECT/INSERT para la aplicación), su FK e índice, y un CHECK que exige email, teléfono
+(10 dígitos ASCII) y dirección a las filas registradas **desde** la migración. Los clientes históricos no se
+reparan, no se borran y conservan su UUID. `scripts/contact-inventory.sql` entrega un inventario **agregado**, sin
+datos personales, para decidir la reparación.
+
+[Política de migración y datos históricos](docs/hu-cli-05-contacts-migration-policy.md) ·
+[Costo de la búsqueda](docs/hu-cli-05-search-benchmark.md)
+
 [Diseño y matriz](docs/design.md) · [Recuperación](docs/recovery.md) ·
 [Handoff de infraestructura/API](docs/handoff.md) · [Evidencia histórica](docs/evidence.md) ·
 [Correcciones y evidencia](docs/corrections-evidence.md) · [Aceptación](docs/acceptance.md)
