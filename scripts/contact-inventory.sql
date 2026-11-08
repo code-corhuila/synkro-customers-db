@@ -6,7 +6,7 @@
 --
 --   psql "$URL" -X -v ON_ERROR_STOP=1 -f scripts/contact-inventory.sql
 --
--- The rules mirror exactly the API and the chk_customer_contacts_required constraint (V011):
+-- The rules mirror exactly the API and the prepared chk_customer_contacts_required constraint (scripts/pending-activation, not yet applied):
 --   email   present, no whitespace or '@' inside the parts, one '@', a '.' after it, at most 255 characters;
 --   phone   exactly ten ASCII digits;
 --   address at least one non-blank character, at most 255 characters.
