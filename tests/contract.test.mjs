@@ -26,7 +26,10 @@ export function sqlFiles(dir) {
 }
 
 test('CONT-06: every historical SQL byte and CODEOWNERS remain intact', () => {
-  const paths = ['01_ddl', '02_dml', '03_dcl', '04_tcl', '05_rollbacks'].flatMap(d => sqlFiles(resolve(root, d)));
+  // HU-CLI-05 adds V008+/U008+; only the fourteen files of the reviewed commit must stay byte-identical.
+  const paths = ['01_ddl', '02_dml', '03_dcl', '04_tcl', '05_rollbacks'].flatMap(d => sqlFiles(resolve(root, d)))
+    .filter(path => /[VU]00[1-7]__/.test(path));
+  assert.equal(paths.length, 14);
   paths.push(resolve(root, '.github/CODEOWNERS'));
   for (const path of paths) {
     const historical = relative(root, path).replaceAll('\\', '/').replace('/01_schemas/', '/00_schemas/');
@@ -41,8 +44,9 @@ test('CONT-06: every historical SQL byte and CODEOWNERS remain intact', () => {
 
 test('CLI-DB-10/14: global versions have matching, family-preserving reversions', () => {
   const forward = ['01_ddl', '02_dml', '03_dcl', '04_tcl'].flatMap(d => sqlFiles(resolve(root, d)));
-  assert.equal(forward.length, 7);
-  assert.deepEqual(forward.map(f => /V(\d{3})__/.exec(f)?.[1]).sort(), ['001','002','003','004','005','006','007']);
+  assert.equal(forward.length, 13);
+  assert.deepEqual(forward.map(f => /V(\d{3})__/.exec(f)?.[1]).sort(),
+    ['001','002','003','004','005','006','007','008','009','010','011','012','013']);
   const rollback = sqlFiles(resolve(root, '05_rollbacks'));
   assert.equal(rollback.length, forward.length);
   for (const f of forward) {
@@ -66,4 +70,14 @@ test('REV-07: JDBC connection, login and socket limits have safe finite defaults
   assert.match(config, /jdbcProperties\.connectTimeout\s*=\s*"5"/);
   assert.match(config, /jdbcProperties\.loginTimeout\s*=\s*"10"/);
   assert.match(config, /jdbcProperties\.socketTimeout\s*=\s*"60"/);
+});
+
+test('HU-CLI-05: V008+ are additive (nothing is dropped, deleted or rewritten) and keep the single global sequence', () => {
+  const forward = ['01_ddl', '02_dml', '03_dcl', '04_tcl'].flatMap(d => sqlFiles(resolve(root, d)))
+    .filter(f => Number(/V(\d{3})__/.exec(f)?.[1]) >= 8);
+  assert.equal(forward.length, 6);
+  for (const f of forward) {
+    const text = readFileSync(f, 'utf8').replace(/--.*$/gm, '');
+    assert.doesNotMatch(text, /\b(DROP\s+(TABLE|COLUMN|SCHEMA|CONSTRAINT)|DELETE\s+FROM|TRUNCATE|UPDATE\s+\S+\s+SET|ALTER\s+COLUMN)\b/i, relative(root, f));
+  }
 });
