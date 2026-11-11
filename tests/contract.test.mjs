@@ -56,10 +56,31 @@ test('CLI-DB-10/14: global versions have matching, family-preserving reversions'
   }
 });
 
+// Migration policy: outOfOrder is never enabled. A TOML assignment may use any spacing around "=" and may carry a
+// trailing comment; commented-out lines and the value false are not an active setting.
+const OUT_OF_ORDER_TRUE = /^[ \t]*outOfOrder[ \t]*=[ \t]*["']?true["']?[ \t]*(?:#.*)?$/m;
+const enablesOutOfOrder = config => OUT_OF_ORDER_TRUE.test(config);
+
+test('HU-CLI-05 review: the outOfOrder guard detects every valid spelling of an enabled setting and nothing else', () => {
+  for (const enabled of ['outOfOrder=true', 'outOfOrder = true', 'outOfOrder  =  true', 'outOfOrder\t=\ttrue', 'outOfOrder =true', 'outOfOrder= true',
+    '  outOfOrder = true', 'outOfOrder = true # enabled', 'outOfOrder = "true"', '[flyway]\nlocations = []\noutOfOrder = true\ntable = "x"',
+    '[flyway]\r\noutOfOrder = true\r\n'])
+    assert.equal(enablesOutOfOrder(enabled), true, JSON.stringify(enabled));
+  for (const inactive of ['outOfOrder = false', 'outOfOrder=false', 'outOfOrder = false # true', '# outOfOrder = true', '  # outOfOrder=true',
+    '# never set outOfOrder = true here', 'outOfOrder = "false"', 'outOfOrder = truest', 'notOutOfOrder = true', ''])
+    assert.equal(enablesOutOfOrder(inactive), false, JSON.stringify(inactive));
+});
+
+test('HU-CLI-05 review: the committed flyway.toml spelling is the one the guard must detect', () => {
+  const config = readFileSync(resolve(root, 'flyway.toml'), 'utf8');
+  assert.match(config, /^outOfOrder = false$/m);
+  assert.equal(enablesOutOfOrder(config.replace('outOfOrder = false', 'outOfOrder = true')), true);
+});
+
 test('HU-CLI-05: the contacts CHECK is prepared but outside every Flyway location (pending activation, no reserved number)', () => {
   const config = readFileSync(resolve(root, 'flyway.toml'), 'utf8');
   assert.ok(config.includes('locations = ["filesystem:01_ddl", "filesystem:02_dml", "filesystem:03_dcl", "filesystem:04_tcl"]'));
-  assert.doesNotMatch(config, /out[Oo]f[Oo]rders*=s*true/);
+  assert.equal(enablesOutOfOrder(config), false, 'flyway.toml must never enable outOfOrder');
   for (const f of ['01_ddl', '02_dml', '03_dcl', '04_tcl', '05_rollbacks'].flatMap(d => sqlFiles(resolve(root, d))))
     assert.doesNotMatch(readFileSync(f, 'utf8'), /chk_customer_contacts_required/, relative(root, f));
   for (const f of ['require-contacts-check.sql', 'require-contacts-check.rollback.sql', 'README.md'])
