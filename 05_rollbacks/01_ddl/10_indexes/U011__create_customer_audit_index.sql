@@ -1,0 +1,1 @@
+DROP INDEX customers_schema.idx_customer_audit_customer_id;
